@@ -132,7 +132,7 @@
 </head>
 <body>
 <div class="intro-banner">
-  <p><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a></p>
+  <p style="text-align:center;"><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a></p>
 </div>
 <header>
   <div class="sun-icon"></div>
@@ -142,6 +142,8 @@
 </header>
 
 <div class="app">
+
+  <p style="margin:0 0 16px;line-height:1.55;">This app shows how much it costs to have PV + Batteries meet most of a household&rsquo;s energy needs, including cooking which is, by far, a household&rsquo;s largest energy need. The main output is a graphic representation of the trade-off between cost and&nbsp; the need for load flexibility.<br><br><strong>Step 1: click on the map or type in the location</strong></p>
 
   <div class="card">
     <div class="card-title">📍 Location</div>
@@ -179,6 +181,8 @@
     <p class="cmp-hint">Map tiles &copy; <a href="https://www.esri.com" target="_blank" rel="noopener" style="color:var(--sun)">Esri</a> &mdash; Esri, HERE, Garmin, FAO, NOAA, USGS, &copy; OpenStreetMap contributors, and the GIS User Community</p>
     <p class="cmp-hint" id="data-fetched-display" style="display:none;margin-top:6px;"></p>
   </div>
+
+  <p style="margin:16px 0;"><strong>Step 2: Change the cost and load inputs if you want.</strong></p>
 
   <div id="status"></div>
   <div id="error-msg"></div>
@@ -220,6 +224,8 @@
     </div>
   </div>
 
+  <p style="margin:16px 0;"><strong>Step 3: Enter the widest range you think might be appropriate to simulate.</strong></p>
+
   <div class="card">
     <div class="card-title">🔆 System Configurations</div>
     <p class="sys-note">Every combination of PV size × battery size in the ranges below is
@@ -246,7 +252,10 @@
 
   <div class="run-controls-bar" id="run-controls">
     <p id="location-drift-warning">⚠️ The location has changed since the last simulation. Results still reflect the old location — run the simulation again to update them.</p>
-    <button class="btn-run" id="btn-run">Run Simulation</button>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <strong>Step 4:</strong>
+      <button class="btn-run" id="btn-run" style="width:auto;flex:1;margin-top:0;">Run Simulation</button>
+    </div>
   </div>
 
   <div id="results">
@@ -260,8 +269,20 @@
         </label>
       </div>
       <div class="cal-wrap"><svg id="unmet-kwh-scatter-chart" viewBox="0 0 640 418" style="width:100%;height:auto;min-width:480px;"></svg></div>
-      <p class="cmp-hint">Each dot is one PV/battery configuration. Green dots have no other config that's both cheaper and lower in unmet kWh; gray dots are dominated by at least one such config. Click a dot to highlight the same configuration in the tables below.</p>
+      <p class="cmp-hint">Click a dot to highlight the same configuration in the tables below.</p>
       <p class="cmp-hint" id="scatter-filter-note" style="margin-top:6px;" hidden></p>
+      <p class="cmp-hint" style="margin-top:6px;">Each dot is one PV/battery configuration. Green dots have no other configuration that's both cheaper and lower in unmet kWh; gray dots are dominated by at least one such configuration.</p>
+    </div>
+    <div class="card" id="chart-card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:0;">
+        <span>📄 Report</span>
+        <span class="cmp-hint" style="margin:0;text-transform:none;letter-spacing:normal;font-weight:400;">Downloads a .rtf file readable in Word with your inputs and selected outputs.</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="cmp-hint" id="report-name-display" style="margin:0;"></span>
+          <input type="hidden" id="report-name">
+          <button class="csv-btn" id="btn-report" type="button">⬇ Download</button>
+        </div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">🏆 Cost Frontier</div>
@@ -290,17 +311,6 @@
       </div>
       <div style="overflow-x:auto"><table class="mtbl matrix-tbl" id="combo-matrix"></table></div>
       <p class="cmp-hint" id="combo-matrix-hint"></p>
-    </div>
-    <div class="card" id="chart-card">
-      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <span>📄 Report</span>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span class="cmp-hint" id="report-name-display" style="margin:0;"></span>
-          <input type="hidden" id="report-name">
-          <button class="csv-btn" id="btn-report" type="button">⬇ Download</button>
-        </div>
-      </div>
-      <p class="cmp-hint">Downloads a .rtf file readable in Word with your inputs, the Cost vs. Unmet kWh/Year chart, the Day-by-Day Calendar, the highlighted configuration's cost and unmet kWh/year, both the Unmet kWh/Year and Total Cost matrices, and a list of the simulation's assumptions.</p>
     </div>
     <div class="card">
       <div class="card-title">⚖️ Configuration Comparison</div>
