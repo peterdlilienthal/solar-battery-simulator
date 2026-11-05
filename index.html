@@ -1586,37 +1586,59 @@ function downloadWordReport(){
     ['Data source', `PVGIS ${allRuns[0].datasetLabel} \u2014 ${formatYearLabel(allRuns[0].year)} \u2014 tilt ${allRuns[0].tilt}\u00b0, azimuth ${allRuns[0].azimuth}\u00b0`]
   ];
 
+  const REPORT_USABLE_W = 15840 - 2*700;   // landscape Letter width minus side margins, in twips
   const esc = s => String(s).replace(/[\\{}]/g,c=>'\\'+c).replace(/[^\x00-\x7F]/g,c=>'\\u'+c.charCodeAt(0)+'?');
 
   let rows = '';
   inputs.forEach(([label,val])=>{
-    rows += `\\trowd\\trkeep\\trgaph60\\trleft0\\cellx2600\\cellx9500\n`
+    rows += `\\trowd\\trkeep\\trgaph60\\trleft0\\cellx3200\\cellx${REPORT_USABLE_W}\n`
           + `\\pard\\intbl\\b ${esc(label)}\\b0\\cell\n`
           + `\\pard\\intbl ${esc(val)}\\cell\\row\n`;
   });
 
-  // PV (columns) × battery (rows) cost matrix
+  // PV (columns) × battery (rows) matrices. Landscape Letter (11in) minus the
+  // 700-twip side margins leaves REPORT_USABLE_W twips. Every cell's text is
+  // short and space-free, so the only way to keep it on one line is to make the
+  // font small enough for the widest string to fit its column; the font size is
+  // picked per matrix from the column width and the longest cell text.
   const pvSizes = [...new Set(allRuns.map(r=>r.pv))].sort((a,b)=>a-b);
   const battSizes = [...new Set(allRuns.map(r=>r.batt))].sort((a,b)=>a-b);
   const idxByKey = new Map(allRuns.map((r,i)=>[`${r.pv}|${r.batt}`, i]));
-  const usableWidth = 9840, labelW = 1600;
-  const colW = Math.floor((usableWidth - labelW) / pvSizes.length);
-  const cellxs = [labelW]; pvSizes.forEach((_,i)=>cellxs.push(labelW + colW*(i+1)));
-  const cellxStr = cellxs.map(x=>`\\cellx${x}`).join('');
+  const CELL_PAD = 60;                     // \trgaph — padding on each side of a cell
+  // Approx. Arial bold advance width per char, in twips per half-point of font
+  // size (≈0.6 em × 10 twips/half-point), slightly generous so Word never wraps.
+  const charTwips = fs => fs * 6.2;
+  const textTwips = (txt, fs) => Math.ceil(String(txt).length * charTwips(fs));
+  const MATRIX_CORNER = 'Batt \\ PV';
 
   const buildMatrixRows = cellText => {
-    let out = `\\trowd\\trkeep\\trgaph60\\trleft0${cellxStr}\n\\pard\\intbl\\qc\\b ${esc('Battery (rows) / PV (columns)')}\\b0\\cell`;
-    pvSizes.forEach(pv => out += `\\pard\\intbl\\qc\\b ${pv}W\\b0\\cell`);
+    const cells = battSizes.map(batt => pvSizes.map(pv => {
+      const idx = idxByKey.get(`${pv}|${batt}`);
+      return idx===undefined ? '—' : cellText(allRuns[idx]);
+    }));
+    const colLabels = pvSizes.map(pv => `${pv}W`);
+    const rowLabels = battSizes.map(batt => `${batt}Wh`);
+    const maxColChars = Math.max(...colLabels.map(t=>t.length), ...cells.flat().map(t=>t.length));
+    const maxRowChars = Math.max(MATRIX_CORNER.length, ...rowLabels.map(t=>t.length));
+    // Largest font (≤10pt, ≥4pt) at which label column + all data columns fit the page width.
+    let fs = 20;
+    while(fs > 8 && (maxRowChars + maxColChars*pvSizes.length)*charTwips(fs)
+                    + 2*CELL_PAD*(pvSizes.length+1) > REPORT_USABLE_W) fs--;
+    const labelW = textTwips('x'.repeat(maxRowChars), fs) + 2*CELL_PAD;
+    const colW = Math.floor((REPORT_USABLE_W - labelW) / pvSizes.length);
+    const cellxs = [labelW]; pvSizes.forEach((_,i)=>cellxs.push(labelW + colW*(i+1)));
+    const rowHead = `\\trowd\\trkeep\\trgaph${CELL_PAD}\\trleft0${cellxs.map(x=>`\\cellx${x}`).join('')}\n`;
+    const cell = (txt, bold) => `\\pard\\intbl\\qc\\fs${fs}${bold?'\\b':''} ${esc(txt)}${bold?'\\b0':''}\\cell`;
+
+    let out = rowHead + cell(MATRIX_CORNER, true);
+    colLabels.forEach(t => out += cell(t, true));
     out += `\\row\n`;
-    battSizes.forEach(batt=>{
-      out += `\\trowd\\trkeep\\trgaph60\\trleft0${cellxStr}\n\\pard\\intbl\\qc\\b ${batt}Wh\\b0\\cell`;
-      pvSizes.forEach(pv=>{
-        const idx = idxByKey.get(`${pv}|${batt}`);
-        out += `\\pard\\intbl\\qc ${esc(idx===undefined ? '\u2014' : cellText(allRuns[idx]))}\\cell`;
-      });
+    rowLabels.forEach((rl, r)=>{
+      out += rowHead + cell(rl, true);
+      cells[r].forEach(t => out += cell(t, false));
       out += `\\row\n`;
     });
-    return out;
+    return out + `\\pard\\fs20`;
   };
   const costRows = buildMatrixRows(run => '$'+Math.round(run.cost).toLocaleString());
   const unmetKwhRows = buildMatrixRows(run => formatUnmetKwh(computeTotalUnmetKwh(run)));
@@ -1641,7 +1663,7 @@ function downloadWordReport(){
   ];
   let configRows = '';
   configFields.forEach(([label,val])=>{
-    configRows += `\\trowd\\trkeep\\trgaph60\\trleft0\\cellx2600\\cellx9500\n`
+    configRows += `\\trowd\\trkeep\\trgaph60\\trleft0\\cellx3200\\cellx${REPORT_USABLE_W}\n`
           + `\\pard\\intbl\\b ${esc(label)}\\b0\\cell\n`
           + `\\pard\\intbl ${esc(val)}\\cell\\row\n`;
   });
@@ -1658,7 +1680,8 @@ function downloadWordReport(){
 
   const rtf = `{\\rtf1\\ansi\\ansicpg1252\\deff0\\deflang1033
 {\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}}
-\\paperw12240\\paperh15840\\margl700\\margr700\\margt600\\margb600
+\\paperw15840\\paperh12240\\landscape\\margl700\\margr700\\margt600\\margb600
+\\sectd\\lndscpsxn\\pgwsxn15840\\pghsxn12240\\marglsxn700\\margrsxn700\\margtsxn600\\margbsxn600
 {\\header\\pard\\qr\\f0\\fs16 ${esc(reportName)}\\par}
 \\pard\\qc\\f0\\fs36\\b ${esc(reportName)}\\b0\\par
 \\pard\\qc\\fs18 Generated ${esc(new Date().toLocaleDateString())}\\par
