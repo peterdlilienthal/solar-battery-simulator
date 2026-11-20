@@ -1632,34 +1632,37 @@ function downloadWordReport(){
   const perBlock = Math.ceil(pvSizes.length / nBlocks);
   const colW = Math.min(Math.floor((REPORT_USABLE_W - labelW) / perBlock), 2*minColW);
 
-  const buildMatrix = (title, cells) => {
-    const heading = t => `\\pard\\keepn\\fs24\\b ${esc(t)}\\b0\\fs20\\par\n`;
-    // keepn (keep with next) on every row but the last holds each block on one
+  // One block of one matrix: the PV columns cols[], with its own header row.
+  const buildMatrixBlock = (title, cells, cols) => {
+    // keepn (keep with next) on every row but the last holds the block on one
     // page whenever it fits, instead of splitting it a few rows in.
     const cell = (txt, bold, keep=true) => `\\pard\\intbl\\qc${keep?'\\keepn':''}\\fs${MATRIX_FS}${bold?'\\b':''} ${esc(txt)}${bold?'\\b0':''}\\cell`;
-
-    let out = '';
-    for(let b=0; b<nBlocks; b++){
-      const c0 = b*perBlock, cols = pvSizes.slice(c0, c0+perBlock).map((_,i)=>c0+i);
-      const cellxs = [labelW]; cols.forEach((_,i)=>cellxs.push(labelW + colW*(i+1)));
-      const rowHead = `\\trowd\\trkeep\\trgaph${CELL_PAD}\\trleft0${cellxs.map(x=>`\\cellx${x}`).join('')}\n`;
-      if(b === 0) out += heading(title);
-      else out += `\\pard\\par\\page\n` + heading(`${title} (continued, PV ${colLabels[cols[0]]}–${colLabels[cols[cols.length-1]]})`);
-      // \trhdr also repeats the PV header row if a block is too tall for one page.
-      out += rowHead.replace('\\trowd', '\\trowd\\trhdr') + cell(MATRIX_CORNER, true);
-      cols.forEach(c => out += cell(colLabels[c], true));
+    const cellxs = [labelW]; cols.forEach((_,i)=>cellxs.push(labelW + colW*(i+1)));
+    const rowHead = `\\trowd\\trkeep\\trgaph${CELL_PAD}\\trleft0${cellxs.map(x=>`\\cellx${x}`).join('')}\n`;
+    let out = `\\pard\\keepn\\fs24\\b ${esc(title)}\\b0\\fs20\\par\n`;
+    // \trhdr also repeats the PV header row if a block is too tall for one page.
+    out += rowHead.replace('\\trowd', '\\trowd\\trhdr') + cell(MATRIX_CORNER, true);
+    cols.forEach(c => out += cell(colLabels[c], true));
+    out += `\\row\n`;
+    rowLabels.forEach((rl, r)=>{
+      const keep = r < rowLabels.length-1;
+      out += rowHead + cell(rl, true, keep);
+      cols.forEach(c => out += cell(cells[r][c], false, keep));
       out += `\\row\n`;
-      rowLabels.forEach((rl, r)=>{
-        const keep = r < rowLabels.length-1;
-        out += rowHead + cell(rl, true, keep);
-        cols.forEach(c => out += cell(cells[r][c], false, keep));
-        out += `\\row\n`;
-      });
-    }
-    return out + `\\pard\\fs20`;
+    });
+    return out + `\\pard\\fs20\\par\n`;
   };
-  const costMatrix = buildMatrix('Total Cost Matrix', costCells);
-  const unmetKwhMatrix = buildMatrix('Unmet kWh/Year Matrix', unmetCells);
+  // Both matrices, block by block: each page pairs the Unmet kWh and Total Cost
+  // tables for the same PV sizes, so a column means the same PV size in both.
+  let matrices = '';
+  for(let b=0; b<nBlocks; b++){
+    const cols = pvSizes.slice(b*perBlock, (b+1)*perBlock).map((_,i)=>b*perBlock+i);
+    const range = nBlocks > 1 ? ` (PV ${colLabels[cols[0]]}–${colLabels[cols[cols.length-1]]})` : '';
+    // Every block, the first included, starts a fresh page so its two tables share it.
+    matrices += `\\pard\\page\n`;
+    matrices += buildMatrixBlock(`Unmet kWh/Year Matrix${range}`, unmetCells, cols)
+              + buildMatrixBlock(`Total Cost Matrix${range}`, costCells, cols);
+  }
 
   const ASSUMPTIONS = [
     'PV panels face the equator and are tilted at an angle equal to latitude.',
@@ -1716,11 +1719,7 @@ ${rows}
 \\pard\\keepn\\fs24\\b Highlighted Configuration\\b0\\fs20\\par
 ${configRows}
 \\pard\\par
-${unmetKwhMatrix}
-\\pard\\par
-${costMatrix}
-\\pard\\par
-\\pard\\keepn\\fs24\\b Assumptions\\b0\\fs20\\par
+${matrices}\\pard\\keepn\\fs24\\b Assumptions\\b0\\fs20\\par
 ${assumptionRows}
 }`;
 
