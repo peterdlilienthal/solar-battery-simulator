@@ -151,7 +151,7 @@
 </head>
 <body>
 <div class="intro-banner">
-  <p style="text-align:center;"><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a><a class="getting-started-link" href="index.html?advanced=1">Advanced</a></p>
+  <p style="text-align:center;"><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a></p>
 </div>
 <header>
   <div class="sun-icon"></div>
@@ -502,7 +502,7 @@ function setAdvanced(on){
   if(psc && typeof psc.lat === 'number' && typeof psc.lon === 'number') placeSearchCoords = psc;
   if(Array.isArray(saved.__battCostTable) && saved.__battCostTable.length)
     battCostTable = saved.__battCostTable.map(r=>({c:String(r.c ?? ''), price:String(r.price ?? '')}));
-  // ?advanced=1 (the home page "Advanced" link) forces advanced mode on; otherwise use the saved setting
+  // ?advanced=1 (for an external "Advanced" link, e.g. from Cleanpowereverywhere) forces advanced mode on; otherwise use the saved setting
   const urlAdv = new URLSearchParams(location.search).get('advanced');
   setAdvanced(urlAdv !== null ? urlAdv !== '0' : !!saved.__advanced);
 })();
@@ -583,6 +583,10 @@ function pickBattRow(rows, battWh, maxLoadW){
   return best;
 }
 function formatCRate(c){ return `${+c.toFixed(3)}C`; }
+function formatBattType(run){ return run.cRate!=null ? `${formatCRate(run.cRate)} @ $${run.battPriceKwh}/kWh` : ''; }
+/* "Battery type" column for the frontier/comparison tables, shown only when the results came from an advanced run */
+function battTypeTh(){ return allRuns && allRuns.length && allRuns[0].cRate!=null ? '<th>Battery type</th>' : ''; }
+function battTypeTd(run){ return run.cRate!=null ? `<td style="font-family:'Space Mono',monospace">${formatBattType(run)}</td>` : ''; }
 
 /* ── Disallow negative numbers in every magnitude-only numeric input (cost/load fields —
    Lat/Long are excluded since negative is a legitimate hemisphere). Clamps to 0 the moment
@@ -1256,7 +1260,7 @@ function renderFrontierTable(){
     .sort((a,b)=> b.run.cost-a.run.cost);
 
   const tbl = document.getElementById('frontier-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th><th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
     rows.map((e,k)=>{
       const {run,i,unmetKwh} = e;
       const next = rows[k+1];
@@ -1265,7 +1269,7 @@ function renderFrontierTable(){
       return `<tr data-idx="${i}" class="${activeCls}">
         <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
-        <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>
+        <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
         <td style="font-family:'Space Mono',monospace">${formatLoadMetPct(computeLoadMetPct(run))}</td>
         <td style="font-family:'Space Mono',monospace">${marginal===null ? '—' : '$'+marginal.toFixed(2)}</td>
@@ -1288,7 +1292,7 @@ function renderFrontierTable(){
 function renderComparison(){
   const isFrontier = computeFrontier(allRuns.map(run=>computeTotalUnmetKwh(run)), allRuns.map(run=>run.cost));
   const tbl = document.getElementById('cmp-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th><th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
     allRuns.map((run,i)=>{
       const soc = computeSocExtremeDays(run);
       const unmetKwh = computeTotalUnmetKwh(run);
@@ -1296,7 +1300,7 @@ function renderComparison(){
       return `<tr data-idx="${i}" class="${rowCls}">
         <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
-        <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>
+        <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
         <td style="font-family:'Space Mono',monospace">${formatLoadMetPct(computeLoadMetPct(run))}</td>
         <td>${soc.atMin}</td>
@@ -1806,6 +1810,7 @@ function downloadWordReport(){
   const configFields = [
     ['PV size', `${activeRun.pv} W`],
     ['Battery size', `${activeRun.batt} Wh`],
+    ...(activeRun.cRate!=null ? [['Battery type', formatBattType(activeRun)]] : []),
     ['Total cost', `$${Math.round(activeRun.cost).toLocaleString()}`],
     ['Unmet kWh/year', formatUnmetKwh(activeUnmetKwh)],
     ['Load met %/year', formatLoadMetPct(computeLoadMetPct(activeRun))]

@@ -121,7 +121,7 @@ worker is ever renamed or moved to a custom domain.
      the screen.
 
 6. **Advanced mode** — an "Advanced" switch at the top of the app (also turned on by
-   `index.html?advanced=1`, which the banner's "Advanced" link opens) toggles
+   `index.html?advanced=1`, for an external link such as Cleanpowereverywhere's) toggles
    `body.advanced`; `.adv-only` / `.basic-only` elements show/hide with it. On, the
    single `cost-batt-kwh` field is replaced by a battery cost table (`battCostTable`,
    rows of C-rate + $/kWh, saved in localStorage as `__battCostTable`) and a
@@ -130,7 +130,10 @@ worker is ever renamed or moved to a custom domain.
    PV doesn't count). Sizes no row can serve are skipped (`#adv-skip-note`). The chosen
    row prices the battery and `simulate()`'s `battMaxW` (= C × Wh) caps charge and
    discharge energy per hour. `run.cRate` / `run.battPriceKwh` are shown in the
-   scatter-dot hover; basic mode leaves `cRate` null and `battMaxW` unlimited.
+   scatter-dot hover, a "Battery type" column in the frontier and comparison tables
+   (`battTypeTh()` / `battTypeTd()`, only for advanced runs) and the report's selected
+   config. The matrices don't show it. Basic mode leaves `cRate` null and `battMaxW`
+   unlimited.
 
 ## Simulation model — known simplifications
 
