@@ -1612,22 +1612,27 @@ function downloadWordReport(){
   const textTwips = txt => Math.ceil(String(txt).length * MATRIX_FS * 6.2);
   const MATRIX_CORNER = 'Batt \\ PV';
 
-  const buildMatrix = (title, cellText) => {
-    const cells = battSizes.map(batt => pvSizes.map(pv => {
-      const idx = idxByKey.get(`${pv}|${batt}`);
-      return idx===undefined ? '—' : cellText(allRuns[idx]);
-    }));
-    const colLabels = pvSizes.map(pv => `${pv}W`);
-    const rowLabels = battSizes.map(batt => `${batt}Wh`);
-    const labelW = Math.max(...[MATRIX_CORNER, ...rowLabels].map(textTwips)) + 2*CELL_PAD;
-    const minColW = Math.max(...[...colLabels, ...cells.flat()].map(textTwips)) + 2*CELL_PAD;
-    // Columns per page, then spread the columns evenly over the blocks needed so
-    // the last page isn't left with one or two stragglers.
-    const maxPerBlock = Math.max(1, Math.floor((REPORT_USABLE_W - labelW) / minColW));
-    const nBlocks = Math.ceil(pvSizes.length / maxPerBlock);
-    const perBlock = Math.ceil(pvSizes.length / nBlocks);
-    const colW = Math.min(Math.floor((REPORT_USABLE_W - labelW) / perBlock), 2*minColW);
+  const colLabels = pvSizes.map(pv => `${pv}W`);
+  const rowLabels = battSizes.map(batt => `${batt}Wh`);
+  const matrixCells = cellText => battSizes.map(batt => pvSizes.map(pv => {
+    const idx = idxByKey.get(`${pv}|${batt}`);
+    return idx===undefined ? '—' : cellText(allRuns[idx]);
+  }));
+  const costCells  = matrixCells(run => '$'+Math.round(run.cost).toLocaleString());
+  const unmetCells = matrixCells(run => formatUnmetKwh(computeTotalUnmetKwh(run)));
 
+  // One layout shared by both matrices, sized from the widest text in either, so
+  // their columns line up and they split onto pages at the same PV sizes.
+  const labelW = Math.max(...[MATRIX_CORNER, ...rowLabels].map(textTwips)) + 2*CELL_PAD;
+  const minColW = Math.max(...[...colLabels, ...costCells.flat(), ...unmetCells.flat()].map(textTwips)) + 2*CELL_PAD;
+  // Columns per page, then spread the columns evenly over the blocks needed so
+  // the last page isn't left with one or two stragglers.
+  const maxPerBlock = Math.max(1, Math.floor((REPORT_USABLE_W - labelW) / minColW));
+  const nBlocks = Math.ceil(pvSizes.length / maxPerBlock);
+  const perBlock = Math.ceil(pvSizes.length / nBlocks);
+  const colW = Math.min(Math.floor((REPORT_USABLE_W - labelW) / perBlock), 2*minColW);
+
+  const buildMatrix = (title, cells) => {
     const heading = t => `\\pard\\keepn\\fs24\\b ${esc(t)}\\b0\\fs20\\par\n`;
     // keepn (keep with next) on every row but the last holds each block on one
     // page whenever it fits, instead of splitting it a few rows in.
@@ -1653,8 +1658,8 @@ function downloadWordReport(){
     }
     return out + `\\pard\\fs20`;
   };
-  const costMatrix = buildMatrix('Total Cost Matrix', run => '$'+Math.round(run.cost).toLocaleString());
-  const unmetKwhMatrix = buildMatrix('Unmet kWh/Year Matrix', run => formatUnmetKwh(computeTotalUnmetKwh(run)));
+  const costMatrix = buildMatrix('Total Cost Matrix', costCells);
+  const unmetKwhMatrix = buildMatrix('Unmet kWh/Year Matrix', unmetCells);
 
   const ASSUMPTIONS = [
     'PV panels face the equator and are tilted at an angle equal to latitude.',
