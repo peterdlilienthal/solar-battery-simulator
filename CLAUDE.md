@@ -134,6 +134,12 @@ worker is ever renamed or moved to a custom domain.
    (`battTypeTh()` / `battTypeTd()`, only for advanced runs) and the report's selected
    config. The matrices don't show it. Basic mode leaves `cRate` null and `battMaxW`
    unlimited.
+   An Economics card (advanced only) holds `unmet-cost-kwh`, `discount-rate`,
+   `discount-years`. Each advanced run gets `run.npvUnmet` = unmet kWh/yr × $/kWh ×
+   `annuityFactor(rate, years)` and `run.lifecycleCost` = `run.cost` + that. It's shown
+   *alongside* the upfront cost (a "Lifecycle cost" column in the frontier and
+   comparison tables, the scatter hover, the report's selected config); `run.cost`
+   itself stays upfront-only, so the scatter, frontier and matrices are unchanged.
 
 ## Simulation model — known simplifications
 

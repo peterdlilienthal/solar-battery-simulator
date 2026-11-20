@@ -605,6 +605,13 @@ function pickBattRow(rows, battWh, maxLoadW){
   return best;
 }
 function formatCRate(c){ return `${+c.toFixed(3)}C`; }
+/* Present value of $1/year for `years` years at annual `rate` (end-of-year payments).
+   rate 0 → just `years`. */
+function annuityFactor(rate, years){ return rate>0 ? (1-Math.pow(1+rate,-years))/rate : years; }
+function formatDollars(v){ return '$'+Math.round(v).toLocaleString(); }
+/* "Lifecycle cost" column (upfront + NPV of unmet energy), advanced runs only */
+function lifecycleTh(){ return allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? '<th title="Total cost plus the present value of unmet energy over the discount period">Lifecycle cost</th>' : ''; }
+function lifecycleTd(run){ return run.lifecycleCost!=null ? `<td style="font-family:'Space Mono',monospace">${formatDollars(run.lifecycleCost)}</td>` : ''; }
 function formatBattType(run){ return run.cRate!=null ? `${formatCRate(run.cRate)} @ $${run.battPriceKwh}/kWh` : ''; }
 /* "Battery type" column for the frontier/comparison tables, shown only when the results came from an advanced run */
 function battTypeTh(){ return allRuns && allRuns.length && allRuns[0].cRate!=null ? '<th>Battery type</th>' : ''; }
@@ -1282,14 +1289,14 @@ function renderFrontierTable(){
     .sort((a,b)=> b.run.cost-a.run.cost);
 
   const tbl = document.getElementById('frontier-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>Total Cost</th>${lifecycleTh()}<th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
     rows.map((e,k)=>{
       const {run,i,unmetKwh} = e;
       const next = rows[k+1];
       const marginal = next ? (run.cost-next.run.cost)/(next.unmetKwh-unmetKwh) : null;
       const activeCls = i===activeCfgIdx ? ' active-row' : '';
       return `<tr data-idx="${i}" class="${activeCls}">
-        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
+        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>${lifecycleTd(run)}
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
         <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
@@ -1314,13 +1321,13 @@ function renderFrontierTable(){
 function renderComparison(){
   const isFrontier = computeFrontier(allRuns.map(run=>computeTotalUnmetKwh(run)), allRuns.map(run=>run.cost));
   const tbl = document.getElementById('cmp-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>Total Cost</th>${lifecycleTh()}<th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
     allRuns.map((run,i)=>{
       const soc = computeSocExtremeDays(run);
       const unmetKwh = computeTotalUnmetKwh(run);
       const rowCls = (i===activeCfgIdx ? ' active-row' : '') + (isFrontier[i] ? ' frontier-row' : '');
       return `<tr data-idx="${i}" class="${rowCls}">
-        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
+        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>${lifecycleTd(run)}
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
         <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
@@ -1503,7 +1510,7 @@ function renderUnmetKwhScatter(){
     const isActive = i===activeCfgIdx;
     const r = isActive?6:4;
     const frontierNote = isFrontier[i] ? ' (no cheaper system has lower unmet kWh, and no lower-unmet-kWh system is cheaper)' : '';
-    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${run.cRate!=null ? ` — ${formatCRate(run.cRate)} battery at $${run.battPriceKwh}/kWh` : ''}${frontierNote}</title></circle>`;
+    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${run.cRate!=null ? ` — ${formatCRate(run.cRate)} battery at $${run.battPriceKwh}/kWh` : ''}${run.lifecycleCost!=null ? ` — lifecycle cost ${formatDollars(run.lifecycleCost)} (incl. ${formatDollars(run.npvUnmet)} NPV of unmet energy)` : ''}${frontierNote}</title></circle>`;
   };
   // Draw non-frontier (gray) dots first, then frontier (green) dots, so green always sits on top.
   allRuns.forEach((run,i)=>{ if(inView(i) && !isFrontier[i]) svg += dotSvg(i); });
@@ -1837,6 +1844,7 @@ function downloadWordReport(){
     ['Battery size', `${activeRun.batt} Wh`],
     ...(activeRun.cRate!=null ? [['Battery type', formatBattType(activeRun)]] : []),
     ['Total cost', `$${Math.round(activeRun.cost).toLocaleString()}`],
+    ...(activeRun.lifecycleCost!=null ? [['NPV of unmet energy', formatDollars(activeRun.npvUnmet)], ['Lifecycle cost', formatDollars(activeRun.lifecycleCost)]] : []),
     ['Unmet kWh/year', formatUnmetKwh(activeUnmetKwh)],
     ['Load met %/year', formatLoadMetPct(computeLoadMetPct(activeRun))]
   ];
@@ -1997,7 +2005,7 @@ async function performSimulation({scroll=true}={}){
   if(dayWh+nightWh<=0){setErr('Total daily load must be > 0 Wh.');return;}
   if(isNaN(costPvW)||costPvW<0){setErr('$ per watt (PV) must be a non-negative number.');return;}
   const advanced = isAdvanced();
-  let battRows = null, maxLoadW = 0;
+  let battRows = null, maxLoadW = 0, econ = null;
   if(advanced){
     try{ battRows = parseBattCostTable(); }catch(e){ setErr(e.message); return; }
     const maxLoadKw = parseFloat(document.getElementById('max-load-kw').value);
@@ -2008,6 +2016,7 @@ async function performSimulation({scroll=true}={}){
     if(isNaN(unmetCost)||unmetCost<0){setErr('Cost of unmet energy ($/kWh) must be a non-negative number.');return;}
     if(isNaN(discRate)||discRate<0){setErr('Discount rate (%) must be a non-negative number.');return;}
     if(isNaN(discYears)||discYears<=0){setErr('Discount period (years) must be greater than 0.');return;}
+    econ = { unmetCost, annuity: annuityFactor(discRate/100, discYears) };
     maxLoadW = maxLoadKw*1000;
   }else if(isNaN(costBattKwh)||costBattKwh<0){setErr('$ per kWh (battery) must be a non-negative number.');return;}
   if(isNaN(costFixed)||costFixed<0){setErr('Inverter, controls & misc ($) must be a non-negative number.');return;}
@@ -2067,10 +2076,17 @@ async function performSimulation({scroll=true}={}){
       const cost = cfg.pv*costPvW + (cfg.batt/1000)*battPriceKwh + costFixed;
       return {
         pv:cfg.pv, batt:cfg.batt, results, hourlyLog, cost,
-        cRate: row ? row.c : null, battPriceKwh,
+        cRate: row ? row.c : null, battPriceKwh, econ,
         year, meta, dayWh, nightWh,
         datasetLabel: displayName, tilt, azimuth
       };
+    });
+    // Advanced: NPV of the yearly unmet energy over the discount period, added to the upfront
+    // cost as a separate lifecycle cost (run.cost itself stays the upfront cost everywhere)
+    allRuns.forEach(run=>{
+      if(!run.econ) return;
+      run.npvUnmet = computeTotalUnmetKwh(run) * run.econ.unmetCost * run.econ.annuity;
+      run.lifecycleCost = run.cost + run.npvUnmet;
     });
     // default selection to the config with the least unmet energy
     activeCfgIdx = allRuns.reduce((bi,run,i,arr)=> computeTotalUnmetKwh(run)<computeTotalUnmetKwh(arr[bi])?i:bi, 0);
