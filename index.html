@@ -1628,14 +1628,19 @@ function downloadWordReport(){
     const colW = Math.floor((REPORT_USABLE_W - labelW) / pvSizes.length);
     const cellxs = [labelW]; pvSizes.forEach((_,i)=>cellxs.push(labelW + colW*(i+1)));
     const rowHead = `\\trowd\\trkeep\\trgaph${CELL_PAD}\\trleft0${cellxs.map(x=>`\\cellx${x}`).join('')}\n`;
-    const cell = (txt, bold) => `\\pard\\intbl\\qc\\fs${fs}${bold?'\\b':''} ${esc(txt)}${bold?'\\b0':''}\\cell`;
+    // keepn (keep with next) on every row but the last holds the whole matrix on
+    // one page whenever it fits, instead of splitting it a few rows in.
+    const cell = (txt, bold, keep=true) => `\\pard\\intbl\\qc${keep?'\\keepn':''}\\fs${fs}${bold?'\\b':''} ${esc(txt)}${bold?'\\b0':''}\\cell`;
 
-    let out = rowHead + cell(MATRIX_CORNER, true);
+    // \trhdr marks the PV header row as a repeating table header, so when a matrix
+    // is too tall for one page Word redraws that row at the top of each page.
+    let out = rowHead.replace('\\trowd', '\\trowd\\trhdr') + cell(MATRIX_CORNER, true);
     colLabels.forEach(t => out += cell(t, true));
     out += `\\row\n`;
     rowLabels.forEach((rl, r)=>{
-      out += rowHead + cell(rl, true);
-      cells[r].forEach(t => out += cell(t, false));
+      const keep = r < rowLabels.length-1;
+      out += rowHead + cell(rl, true, keep);
+      cells[r].forEach(t => out += cell(t, false, keep));
       out += `\\row\n`;
     });
     return out + `\\pard\\fs20`;
