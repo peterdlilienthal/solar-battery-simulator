@@ -132,6 +132,7 @@
   /* ── Advanced mode: body.advanced shows .adv-only elements and hides .basic-only ones ── */
   .adv-only{display:none !important;}
   body.advanced .adv-only{display:flex !important;}
+  body.advanced .card.adv-only{display:block !important;}
   body.advanced .basic-only{display:none !important;}
   .adv-switch-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:14px;}
   .adv-switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:15px;color:rgba(255,255,255,.85);user-select:none;}
@@ -261,6 +262,27 @@
         <label>Maximum load (kW)</label>
         <input type="number" id="max-load-kw" value="1" min="0" step="0.1">
         <span class="hint">Highest power drawn at once. The battery alone must be able to supply it (PV doesn't count).</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card adv-only">
+    <div class="card-title">📈 Economics</div>
+    <div class="fields fields-3">
+      <div class="field">
+        <label>Cost of unmet energy ($/kWh)</label>
+        <input type="number" id="unmet-cost-kwh" value="1.00" min="0" step="0.05">
+        <span class="hint">What each kWh of load the system can't supply costs you</span>
+      </div>
+      <div class="field">
+        <label>Discount rate (%)</label>
+        <input type="number" id="discount-rate" value="10" min="0" step="0.5">
+        <span class="hint">Annual rate for valuing future costs</span>
+      </div>
+      <div class="field">
+        <label>Discount period (years)</label>
+        <input type="number" id="discount-years" value="10" min="1" step="1">
+        <span class="hint">How many years of operation to count</span>
       </div>
     </div>
   </div>
@@ -478,7 +500,7 @@ let placeSearchCoords = null;
 const CONFIG_STORAGE_KEY = 'solarSimConfig';
 // report-name is deliberately NOT here — it's per-export, not a saved setting, so it must
 // not persist across reloads or leak from one report into the next.
-const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed','max-load-kw'];
+const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed','max-load-kw','unmet-cost-kwh','discount-rate','discount-years'];
 
 /* ── Advanced mode: a battery cost table by C-rate (replaces the single $/kWh field) and a
    maximum load in kW. battCostTable rows are {c, price} as typed strings so a half-typed
@@ -591,7 +613,7 @@ function battTypeTd(run){ return run.cRate!=null ? `<td style="font-family:'Spac
 /* ── Disallow negative numbers in every magnitude-only numeric input (cost/load fields —
    Lat/Long are excluded since negative is a legitimate hemisphere). Clamps to 0 the moment
    a negative value is fully typed, rather than only rejecting it on Run. ── */
-const NON_NEGATIVE_INPUT_IDS = ['max-load-kw','cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
+const NON_NEGATIVE_INPUT_IDS = ['unmet-cost-kwh','discount-rate','discount-years','max-load-kw','cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
 NON_NEGATIVE_INPUT_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', ()=>{
@@ -1712,7 +1734,10 @@ function downloadWordReport(){
     ['Cost per watt (PV)', `$${g('cost-pv-w')}`],
     ...(allRuns[0].cRate!=null
       ? [['Battery cost by C-rate', battCostTable.filter(r=>String(r.c).trim()!=='').map(r=>`${r.c}C: $${r.price}/kWh`).join(', ')],
-         ['Maximum load', `${g('max-load-kw')} kW`]]
+         ['Maximum load', `${g('max-load-kw')} kW`],
+         ['Cost of unmet energy', `$${g('unmet-cost-kwh')}/kWh`],
+         ['Discount rate', `${g('discount-rate')}%`],
+         ['Discount period', `${g('discount-years')} years`]]
       : [['Cost per kWh (battery)', `$${g('cost-batt-kwh')}`]]),
     ['Inverter, controls & misc', `$${g('cost-fixed')}`],
     ['Data source', `PVGIS ${allRuns[0].datasetLabel} \u2014 ${formatYearLabel(allRuns[0].year)} \u2014 tilt ${allRuns[0].tilt}\u00b0, azimuth ${allRuns[0].azimuth}\u00b0`]
@@ -1977,6 +2002,12 @@ async function performSimulation({scroll=true}={}){
     try{ battRows = parseBattCostTable(); }catch(e){ setErr(e.message); return; }
     const maxLoadKw = parseFloat(document.getElementById('max-load-kw').value);
     if(isNaN(maxLoadKw)||maxLoadKw<0){setErr('Maximum load (kW) must be a non-negative number.');return;}
+    const unmetCost = parseFloat(document.getElementById('unmet-cost-kwh').value);
+    const discRate = parseFloat(document.getElementById('discount-rate').value);
+    const discYears = parseFloat(document.getElementById('discount-years').value);
+    if(isNaN(unmetCost)||unmetCost<0){setErr('Cost of unmet energy ($/kWh) must be a non-negative number.');return;}
+    if(isNaN(discRate)||discRate<0){setErr('Discount rate (%) must be a non-negative number.');return;}
+    if(isNaN(discYears)||discYears<=0){setErr('Discount period (years) must be greater than 0.');return;}
     maxLoadW = maxLoadKw*1000;
   }else if(isNaN(costBattKwh)||costBattKwh<0){setErr('$ per kWh (battery) must be a non-negative number.');return;}
   if(isNaN(costFixed)||costFixed<0){setErr('Inverter, controls & misc ($) must be a non-negative number.');return;}
@@ -2067,7 +2098,7 @@ async function performSimulation({scroll=true}={}){
 
 /* ── Hitting Enter in any input card, or clicking the Run Simulation button, runs the
    full simulation (fetching data first if needed) ── */
-const SIM_TRIGGER_FIELD_IDS = ['max-load-kw','lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
+const SIM_TRIGGER_FIELD_IDS = ['unmet-cost-kwh','discount-rate','discount-years','max-load-kw','lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
 SIM_TRIGGER_FIELD_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('keydown', e=>{
