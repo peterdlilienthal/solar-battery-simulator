@@ -128,11 +128,30 @@
   .getting-started-link{display:inline-block;background:var(--sun);color:var(--dusk);font-weight:700;font-size:15px;padding:8px 18px;border-radius:8px;text-decoration:none;}
   .getting-started-link:hover{background:#ffb84d;}
   .getting-started-link+.getting-started-link{margin-left:10px;}
+
+  /* ── Advanced mode: body.advanced shows .adv-only elements and hides .basic-only ones ── */
+  .adv-only{display:none !important;}
+  body.advanced .adv-only{display:flex !important;}
+  body.advanced .basic-only{display:none !important;}
+  .adv-switch-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:14px;}
+  .adv-switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:15px;color:rgba(255,255,255,.85);user-select:none;}
+  .adv-switch input{position:absolute;opacity:0;width:0;height:0;}
+  .adv-switch .track{width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,.18);position:relative;transition:background .15s;flex-shrink:0;}
+  .adv-switch .track::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--white);transition:left .15s;}
+  .adv-switch input:checked + .track{background:var(--sun);}
+  .adv-switch input:checked + .track::after{left:23px;}
+  .adv-switch input:focus-visible + .track{outline:2px solid var(--sun);outline-offset:2px;}
+  .batt-cost-tbl{border-collapse:collapse;width:100%;}
+  .batt-cost-tbl th{text-align:left;font-size:13px;color:rgba(255,255,255,.7);font-weight:500;padding:0 6px 6px 0;}
+  .batt-cost-tbl td{padding:0 6px 6px 0;}
+  .batt-cost-tbl input{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 11px;color:var(--white);font-family:'Space Mono',monospace;font-size:15px;outline:none;}
+  .batt-cost-tbl input:focus{border-color:var(--sun);background:rgba(245,166,35,.08);}
+  .batt-cost-tbl td.rm{width:36px;}
 </style>
 </head>
 <body>
 <div class="intro-banner">
-  <p style="text-align:center;"><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a></p>
+  <p style="text-align:center;"><a class="getting-started-link" href="Getting Started.html">Getting Started</a><a class="getting-started-link" href="Insights.html">Insights</a><a class="getting-started-link" href="index.html?advanced=1">Advanced</a></p>
 </div>
 <header>
   <div class="sun-icon"></div>
@@ -142,6 +161,14 @@
 </header>
 
 <div class="app">
+
+  <div class="adv-switch-bar">
+    <label class="adv-switch" title="Advanced mode adds a battery cost table by C-rate and a maximum load input">
+      <input type="checkbox" id="advanced-toggle">
+      <span class="track"></span>
+      <span>Advanced</span>
+    </label>
+  </div>
 
   <p style="margin:0 0 16px;line-height:1.55;">This app shows how much it costs to have PV + Batteries meet most of a household&rsquo;s energy needs, including cooking which is, by far, a household&rsquo;s largest energy need. The main output is a graphic representation of the trade-off between cost and&nbsp; the need for load flexibility.<br><br><strong>Step 1: click on the map or type in the location</strong></p>
 
@@ -195,7 +222,7 @@
         <input type="number" id="cost-pv-w" value="1.00" min="0" step="0.01">
         <span class="hint">Total installed cost incl. shipping dealer margins, & mounting</span>
       </div>
-      <div class="field">
+      <div class="field basic-only">
         <label>$ per kWh (battery)</label>
         <input type="number" id="cost-batt-kwh" value="200" min="0" step="1">
         <span class="hint">Total installed Cost per kWh of battery capacity</span>
@@ -205,6 +232,15 @@
         <input type="number" id="cost-fixed" value="50" min="0" step="10">
         <span class="hint">Flat cost, same across all configs</span>
       </div>
+    </div>
+    <div class="field adv-only" style="margin-top:14px;">
+      <label>Battery cost by C-rate</label>
+      <table class="batt-cost-tbl" id="batt-cost-tbl">
+        <thead><tr><th>C-rate</th><th>$ per kWh</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div><button class="csv-btn" id="batt-cost-add" type="button">+ Add row</button></div>
+      <span class="hint">Each battery size uses the cheapest row whose C-rate can deliver the maximum load (C-rate &times; battery kWh &ge; max load kW). The C-rate also limits how fast the battery charges and discharges.</span>
     </div>
   </div>
 
@@ -220,6 +256,11 @@
         <label>Night-time energy need (Wh)</label>
         <input type="number" id="night-load" value="300" min="0" step="10">
         <span class="hint">Drawn from battery after sunset</span>
+      </div>
+      <div class="field adv-only">
+        <label>Maximum load (kW)</label>
+        <input type="number" id="max-load-kw" value="1" min="0" step="0.1">
+        <span class="hint">Highest power drawn at once. The battery alone must be able to supply it (PV doesn't count).</span>
       </div>
     </div>
   </div>
@@ -269,6 +310,7 @@
         </label>
       </div>
       <div class="cal-wrap"><svg id="unmet-kwh-scatter-chart" viewBox="0 0 640 418" style="width:100%;height:auto;min-width:480px;"></svg></div>
+      <p class="cmp-hint" id="adv-skip-note" style="color:var(--sun);" hidden></p>
       <p class="cmp-hint">Click a dot to highlight the same configuration in the tables below.</p>
       <p class="cmp-hint" id="scatter-filter-note" style="margin-top:6px;" hidden></p>
       <p class="cmp-hint" style="margin-top:6px;">Each dot is one PV/battery configuration. Green dots have no other configuration that's both cheaper and lower in unmet kWh; gray dots are dominated by at least one such configuration.</p>
@@ -436,7 +478,18 @@ let placeSearchCoords = null;
 const CONFIG_STORAGE_KEY = 'solarSimConfig';
 // report-name is deliberately NOT here — it's per-export, not a saved setting, so it must
 // not persist across reloads or leak from one report into the next.
-const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
+const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed','max-load-kw'];
+
+/* ── Advanced mode: a battery cost table by C-rate (replaces the single $/kWh field) and a
+   maximum load in kW. battCostTable rows are {c, price} as typed strings so a half-typed
+   row survives a reload; parseBattCostTable() validates them at run time. ── */
+const DEFAULT_BATT_COST_TABLE = [{c:'0.25',price:'180'},{c:'0.5',price:'200'},{c:'1',price:'250'},{c:'2',price:'350'}];
+let battCostTable = DEFAULT_BATT_COST_TABLE.map(r=>({...r}));
+function isAdvanced(){ return document.body.classList.contains('advanced'); }
+function setAdvanced(on){
+  document.body.classList.toggle('advanced', !!on);
+  document.getElementById('advanced-toggle').checked = !!on;
+}
 (function restoreSavedConfig(){
   let saved;
   try{ saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || '{}'); }catch(e){ saved = {}; }
@@ -447,9 +500,14 @@ const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv
   });
   const psc = saved.__placeSearchCoords;
   if(psc && typeof psc.lat === 'number' && typeof psc.lon === 'number') placeSearchCoords = psc;
+  if(Array.isArray(saved.__battCostTable) && saved.__battCostTable.length)
+    battCostTable = saved.__battCostTable.map(r=>({c:String(r.c ?? ''), price:String(r.price ?? '')}));
+  // ?advanced=1 (the home page "Advanced" link) forces advanced mode on; otherwise use the saved setting
+  const urlAdv = new URLSearchParams(location.search).get('advanced');
+  setAdvanced(urlAdv !== null ? urlAdv !== '0' : !!saved.__advanced);
 })();
 function saveConfig(){
-  const data = { __placeSearchCoords: placeSearchCoords };
+  const data = { __placeSearchCoords: placeSearchCoords, __advanced: isAdvanced(), __battCostTable: battCostTable };
   CONFIG_FIELD_IDS.forEach(id=>{
     const el = document.getElementById(id);
     if(el) data[id] = el.value;
@@ -461,10 +519,75 @@ CONFIG_FIELD_IDS.forEach(id=>{
   if(el) el.addEventListener('input', saveConfig);
 });
 
+/* ── Advanced switch and the battery cost table editor ── */
+document.getElementById('advanced-toggle').addEventListener('change', e=>{
+  setAdvanced(e.target.checked);
+  // keep the address bar in step so a reload / shared link matches what's on screen
+  const url = new URL(location.href);
+  if(e.target.checked) url.searchParams.set('advanced','1'); else url.searchParams.delete('advanced');
+  try{ history.replaceState(null, '', url); }catch(err){ /* file:// in some browsers — harmless */ }
+  saveConfig();
+});
+function renderBattCostTable(){
+  const tbody = document.querySelector('#batt-cost-tbl tbody');
+  const escAttr = v => String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  tbody.innerHTML = battCostTable.map((r,i)=>`<tr>
+      <td><input type="number" min="0" step="0.05" data-row="${i}" data-col="c" value="${escAttr(r.c)}" aria-label="C-rate, row ${i+1}"></td>
+      <td><input type="number" min="0" step="1" data-row="${i}" data-col="price" value="${escAttr(r.price)}" aria-label="Dollars per kWh, row ${i+1}"></td>
+      <td class="rm"><button class="csv-btn" type="button" data-rm="${i}" title="Remove row" ${battCostTable.length<=1?'disabled':''}>✕</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      if(inp.value !== '' && parseFloat(inp.value) < 0) inp.value = 0;
+      battCostTable[+inp.dataset.row][inp.dataset.col] = inp.value;
+      saveConfig();
+    });
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); runSimulation(); } });
+  });
+  tbody.querySelectorAll('[data-rm]').forEach(btn=>btn.addEventListener('click', ()=>{
+    battCostTable.splice(+btn.dataset.rm, 1);
+    renderBattCostTable(); saveConfig();
+  }));
+}
+document.getElementById('batt-cost-add').addEventListener('click', ()=>{
+  battCostTable.push({c:'', price:''});
+  renderBattCostTable(); saveConfig();
+  const inputs = document.querySelectorAll('#batt-cost-tbl tbody input');
+  inputs[inputs.length-2].focus();
+});
+renderBattCostTable();
+
+/* Validates the cost table → [{c, price}] (numbers), or throws with a user-facing message.
+   Fully blank rows are ignored so an unfinished "+ Add row" doesn't block a run. */
+function parseBattCostTable(){
+  const rows = [];
+  battCostTable.forEach((r,i)=>{
+    if(String(r.c).trim()==='' && String(r.price).trim()==='') return;
+    const c = parseFloat(r.c), price = parseFloat(r.price);
+    if(isNaN(c) || c<=0) throw new Error(`Battery cost table row ${i+1}: C-rate must be a number greater than 0.`);
+    if(isNaN(price) || price<0) throw new Error(`Battery cost table row ${i+1}: $ per kWh must be a non-negative number.`);
+    rows.push({c, price});
+  });
+  if(!rows.length) throw new Error('Add at least one row to the battery cost table.');
+  return rows;
+}
+/* The cheapest row able to deliver maxLoadW from a battWh battery (C × kWh ≥ kW), or null
+   when none is fast enough. Equal prices go to the higher C-rate (more headroom, same cost). */
+function pickBattRow(rows, battWh, maxLoadW){
+  const needC = battWh>0 ? maxLoadW/battWh : Infinity;
+  let best = null;
+  for(const r of rows){
+    if(r.c + 1e-9 < needC) continue;
+    if(!best || r.price < best.price || (r.price===best.price && r.c > best.c)) best = r;
+  }
+  return best;
+}
+function formatCRate(c){ return `${+c.toFixed(3)}C`; }
+
 /* ── Disallow negative numbers in every magnitude-only numeric input (cost/load fields —
    Lat/Long are excluded since negative is a legitimate hemisphere). Clamps to 0 the moment
    a negative value is fully typed, rather than only rejecting it on Run. ── */
-const NON_NEGATIVE_INPUT_IDS = ['cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
+const NON_NEGATIVE_INPUT_IDS = ['max-load-kw','cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
 NON_NEGATIVE_INPUT_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', ()=>{
@@ -912,7 +1035,9 @@ async function fetchPVGIS(lat, lon, year) {
 /* ── Simulate. `hourly` is PVGIS output: one {p, gi} per hour, in order from Jan 1 —
    `p` is AC watts for a 1 kWp array (PVGIS already applied temperature + system losses),
    `gi` is plane-of-array irradiance used only to separate daylight hours from night. ── */
-function simulate(hourly, dayWh, nightWh, year, pvW, battWh){
+function simulate(hourly, dayWh, nightWh, year, pvW, battWh, battMaxW=Infinity){
+  // battMaxW (advanced mode): C-rate × capacity. Each hour, energy into the battery and energy
+  // out of it are each capped at battMaxW × 1 h. Basic mode leaves it unlimited.
   const kWp    = pvW/1000;   // PVGIS `p` is per 1 kWp
   const capWh  = battWh;
   const minWh  = capWh*0.10;
@@ -943,12 +1068,12 @@ function simulate(hourly, dayWh, nightWh, year, pvW, battWh){
           const fg=Math.min(gen,need);
           dSrv+=fg; dRem-=fg;
           const still=need-fg;
-          if(still>0){const avail=(batWh-minWh)*dEff;const dd=Math.min(still,avail);dSrv+=dd;dRem-=dd;batWh-=dd/dEff;batDischarge=dd;}
+          if(still>0){const avail=(batWh-minWh)*dEff;const dd=Math.min(still,avail,battMaxW);dSrv+=dd;dRem-=dd;batWh-=dd/dEff;batDischarge=dd;}
           const surplus=gen-fg;
-          if(surplus>0){const sp=capWh-batWh;const chg=Math.min(surplus*cEff,sp);batWh+=chg;batCharge=chg;}
+          if(surplus>0){const sp=capWh-batWh;const chg=Math.min(surplus*cEff,sp,battMaxW);batWh+=chg;batCharge=chg;}
         } else {
           need=Math.min(nightWh/nNight,nRem);
-          const avail=(batWh-minWh)*dEff;const dd=Math.min(need,avail);
+          const avail=(batWh-minWh)*dEff;const dd=Math.min(need,avail,battMaxW);
           nSrv+=dd;nRem-=dd;batWh-=dd/dEff;batDischarge=dd;
         }
         hourlyLog.push({month:m+1,day:d+1,hour:hr.h,poa:hr.gi,pv:gen,batCharge,batDischarge,load:need,batSoc:batWh});
@@ -1352,7 +1477,7 @@ function renderUnmetKwhScatter(){
     const isActive = i===activeCfgIdx;
     const r = isActive?6:4;
     const frontierNote = isFrontier[i] ? ' (no cheaper system has lower unmet kWh, and no lower-unmet-kWh system is cheaper)' : '';
-    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${frontierNote}</title></circle>`;
+    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${run.cRate!=null ? ` — ${formatCRate(run.cRate)} battery at $${run.battPriceKwh}/kWh` : ''}${frontierNote}</title></circle>`;
   };
   // Draw non-frontier (gray) dots first, then frontier (green) dots, so green always sits on top.
   allRuns.forEach((run,i)=>{ if(inView(i) && !isFrontier[i]) svg += dotSvg(i); });
@@ -1581,7 +1706,10 @@ function downloadWordReport(){
     ['PV sizes simulated', `${g('pv-sizes')} W`],
     ['Battery sizes simulated', `${g('batt-sizes')} Wh`],
     ['Cost per watt (PV)', `$${g('cost-pv-w')}`],
-    ['Cost per kWh (battery)', `$${g('cost-batt-kwh')}`],
+    ...(allRuns[0].cRate!=null
+      ? [['Battery cost by C-rate', battCostTable.filter(r=>String(r.c).trim()!=='').map(r=>`${r.c}C: $${r.price}/kWh`).join(', ')],
+         ['Maximum load', `${g('max-load-kw')} kW`]]
+      : [['Cost per kWh (battery)', `$${g('cost-batt-kwh')}`]]),
     ['Inverter, controls & misc', `$${g('cost-fixed')}`],
     ['Data source', `PVGIS ${allRuns[0].datasetLabel} \u2014 ${formatYearLabel(allRuns[0].year)} \u2014 tilt ${allRuns[0].tilt}\u00b0, azimuth ${allRuns[0].azimuth}\u00b0`]
   ];
@@ -1838,7 +1966,14 @@ async function performSimulation({scroll=true}={}){
   if(nightWh<0){setErr('Night-time energy need must be a non-negative number.');return;}
   if(dayWh+nightWh<=0){setErr('Total daily load must be > 0 Wh.');return;}
   if(isNaN(costPvW)||costPvW<0){setErr('$ per watt (PV) must be a non-negative number.');return;}
-  if(isNaN(costBattKwh)||costBattKwh<0){setErr('$ per kWh (battery) must be a non-negative number.');return;}
+  const advanced = isAdvanced();
+  let battRows = null, maxLoadW = 0;
+  if(advanced){
+    try{ battRows = parseBattCostTable(); }catch(e){ setErr(e.message); return; }
+    const maxLoadKw = parseFloat(document.getElementById('max-load-kw').value);
+    if(isNaN(maxLoadKw)||maxLoadKw<0){setErr('Maximum load (kW) must be a non-negative number.');return;}
+    maxLoadW = maxLoadKw*1000;
+  }else if(isNaN(costBattKwh)||costBattKwh<0){setErr('$ per kWh (battery) must be a non-negative number.');return;}
   if(isNaN(costFixed)||costFixed<0){setErr('Inverter, controls & misc ($) must be a non-negative number.');return;}
 
   let pvSizes, battSizes;
@@ -1846,6 +1981,22 @@ async function performSimulation({scroll=true}={}){
     pvSizes   = parseRange('pv-min', 'pv-max', 'pv-int', 'PV');
     battSizes = parseRange('batt-min', 'batt-max', 'batt-int', 'battery');
   }catch(e){ setErr(e.message); return; }
+
+  // Advanced mode: each battery size gets the cheapest C-rate row that can run the max
+  // load; sizes no row can serve are dropped (the battery alone must cover the peak).
+  const battRowBySize = new Map();
+  const skippedBatt = [];
+  if(advanced){
+    for(const batt of battSizes){
+      const row = pickBattRow(battRows, batt, maxLoadW);
+      if(row) battRowBySize.set(batt, row); else skippedBatt.push(batt);
+    }
+    if(skippedBatt.length === battSizes.length){
+      const fastest = Math.max(...battRows.map(r=>r.c));
+      setErr(`No battery in the cost table can deliver the ${maxLoadW/1000} kW maximum load. The fastest row (${formatCRate(fastest)}) needs at least ${Math.ceil(maxLoadW/fastest)} Wh of battery. Add a faster C-rate or larger battery sizes.`);
+      return;
+    }
+  }
 
   let dataPromise;
   if(pvgisCache && pvgisCache.lat===lat && pvgisCache.lon===lon){
@@ -1864,16 +2015,23 @@ async function performSimulation({scroll=true}={}){
     document.getElementById('pv-sizes').value = pvSizes.join(',');
     document.getElementById('batt-sizes').value = battSizes.join(',');
     const CONFIGS = [];
-    for(const pv of pvSizes) for(const batt of battSizes) CONFIGS.push({pv,batt});
+    for(const pv of pvSizes) for(const batt of battSizes){
+      if(advanced && !battRowBySize.has(batt)) continue;
+      CONFIGS.push({pv,batt});
+    }
 
     setSt(`Received ${hourly.length} hourly PV-output values. Simulating ${CONFIGS.length} configuration${CONFIGS.length===1?'':'s'}…`);
     await new Promise(r=>setTimeout(r,40));
 
     allRuns = CONFIGS.map(cfg=>{
-      const {results, hourlyLog} = simulate(hourly, dayWh, nightWh, year, cfg.pv, cfg.batt);
-      const cost = cfg.pv*costPvW + (cfg.batt/1000)*costBattKwh + costFixed;
+      const row = advanced ? battRowBySize.get(cfg.batt) : null;
+      const battMaxW = row ? row.c*cfg.batt : Infinity;
+      const battPriceKwh = row ? row.price : costBattKwh;
+      const {results, hourlyLog} = simulate(hourly, dayWh, nightWh, year, cfg.pv, cfg.batt, battMaxW);
+      const cost = cfg.pv*costPvW + (cfg.batt/1000)*battPriceKwh + costFixed;
       return {
         pv:cfg.pv, batt:cfg.batt, results, hourlyLog, cost,
+        cRate: row ? row.c : null, battPriceKwh,
         year, meta, dayWh, nightWh,
         datasetLabel: displayName, tilt, azimuth
       };
@@ -1884,6 +2042,11 @@ async function performSimulation({scroll=true}={}){
     updateLocationDriftWarning();
 
     setSt('');
+    const skipNote = document.getElementById('adv-skip-note');
+    skipNote.hidden = !skippedBatt.length;
+    skipNote.textContent = skippedBatt.length
+      ? `⚠️ Not simulated: ${skippedBatt.map(b=>b+' Wh').join(', ')} ${skippedBatt.length===1?'battery':'batteries'}. No C-rate in the cost table can deliver the ${maxLoadW/1000} kW maximum load from ${skippedBatt.length===1?'that size':'those sizes'}.`
+      : '';
     document.getElementById('results').style.display='block';
     renderFrontierTable();
     renderComparison();
@@ -1899,7 +2062,7 @@ async function performSimulation({scroll=true}={}){
 
 /* ── Hitting Enter in any input card, or clicking the Run Simulation button, runs the
    full simulation (fetching data first if needed) ── */
-const SIM_TRIGGER_FIELD_IDS = ['lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
+const SIM_TRIGGER_FIELD_IDS = ['max-load-kw','lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
 SIM_TRIGGER_FIELD_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('keydown', e=>{

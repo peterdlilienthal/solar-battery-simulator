@@ -120,6 +120,18 @@ worker is ever renamed or moved to a custom domain.
      `renderUnmetKwhScatter()` and the Word-report canvas so the export matches
      the screen.
 
+6. **Advanced mode** — an "Advanced" switch at the top of the app (also turned on by
+   `index.html?advanced=1`, which the banner's "Advanced" link opens) toggles
+   `body.advanced`; `.adv-only` / `.basic-only` elements show/hide with it. On, the
+   single `cost-batt-kwh` field is replaced by a battery cost table (`battCostTable`,
+   rows of C-rate + $/kWh, saved in localStorage as `__battCostTable`) and a
+   `max-load-kw` input appears. For each battery size `pickBattRow()` picks the
+   cheapest row with `C × kWh ≥ max load kW` (the battery alone must cover the peak;
+   PV doesn't count). Sizes no row can serve are skipped (`#adv-skip-note`). The chosen
+   row prices the battery and `simulate()`'s `battMaxW` (= C × Wh) caps charge and
+   discharge energy per hour. `run.cRate` / `run.battPriceKwh` are shown in the
+   scatter-dot hover; basic mode leaves `cRate` null and `battMaxW` unlimited.
+
 ## Simulation model — known simplifications
 
 These are deliberate simplifications, not bugs, but worth knowing before
@@ -131,7 +143,7 @@ trusting the numbers for a real installation:
   derate, no POA math. Tilt = latitude is a rule of thumb, not per-site optimal
   (optimal is usually a bit shallower). Soiling beyond PVGIS's default 14%
   (e.g. Saharan/Sahel dust) is not modelled — a candidate future input.
-- **Battery discharge has no power/rate limit** — a battery can deliver its
+- **Battery discharge has no power/rate limit** (basic mode; advanced mode caps it at C-rate × capacity) — a battery can deliver its
   entire remaining stored energy in a single hour if the load demands it.
   There's no C-rate or inverter continuous-power cap.
 - **Load is smoothed, not instantaneous** — `dayWh`/`nightWh` are spread
