@@ -139,7 +139,13 @@ worker is ever renamed or moved to a custom domain.
    `annuityFactor(rate, years)` and `run.lifecycleCost` = `run.cost` + that. It's shown
    *alongside* the upfront cost (a "Lifecycle cost" column in the frontier and
    comparison tables, the scatter hover, the report's selected config); `run.cost`
-   itself stays upfront-only, so the scatter, frontier and matrices are unchanged.
+   itself stays upfront-only. The scatter, Cost Frontier and matrix cards each have an
+   Upfront/Lifecycle select (`#scatter-basis`, `#frontier-basis`, `#matrix-basis`,
+   visible only when `#results.has-lifecycle`); `viewCost(run, view)` returns the cost
+   that view ranks and plots by (frontier membership, sort, marginal $/kWh, scatter
+   y-axis and reliable-config cap, matrix cost cells). The comparison table's frontier
+   highlight follows the frontier select; the report's scatter and cost matrix follow
+   theirs.
 
 ## Simulation model — known simplifications
 
