@@ -141,11 +141,12 @@ worker is ever renamed or moved to a custom domain.
    comparison tables, the scatter hover, the report's selected config); `run.cost`
    itself stays upfront-only, and the tables label it "Upfront cost" when the
    lifecycle column is shown. The frontier and comparison tables always rank by upfront
-   cost (both costs are visible as columns, so no switch). The scatter and matrix cards
-   each have an Upfront/Lifecycle select (`#scatter-basis`, `#matrix-basis`, visible
-   only when `#results.has-lifecycle`); `viewCost(run, view)` returns the cost that view
-   plots by (scatter y-axis and reliable-config cap, matrix cost cells and frontier
-   colouring). The report's scatter and cost matrix follow their selects.
+   cost (both costs are visible as columns, so no switch). The scatter has an
+   Upfront/Lifecycle select (`#scatter-basis`, visible only when
+   `#results.has-lifecycle`); the matrix instead gets a "Lifecycle cost" option in
+   `#matrix-metric` (hidden/disabled unless the run has one). `viewCost(run, view)`
+   returns the cost that view plots by (scatter y-axis and reliable-config cap, matrix
+   frontier colouring and the report's cost matrix).
 
 ## Simulation model — known simplifications
 

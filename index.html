@@ -373,13 +373,12 @@
     <div class="card">
       <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <span>🔢 Matrix (PV × Battery)</span>
-        <span style="display:flex;gap:8px;flex-wrap:wrap;"><select id="matrix-basis" class="metric-select basis-select" title="Which cost this view uses"><option value="upfront">Upfront cost</option><option value="lifecycle">Lifecycle cost</option></select>
         <select id="matrix-metric" class="metric-select">
           <option value="cost">Total Cost</option>
+          <option value="lifecycle-cost" hidden disabled>Lifecycle cost</option>
           <option value="unmet-kwh">Unmet kWh/yr</option>
           <option value="load-met-pct">Load met %</option>
         </select>
-        </span>
       </div>
       <div style="overflow-x:auto"><table class="mtbl matrix-tbl" id="combo-matrix"></table></div>
       <p class="cmp-hint" id="combo-matrix-hint"></p>
@@ -616,14 +615,18 @@ function formatCRate(c){ return `${+c.toFixed(3)}C`; }
 /* Present value of $1/year for `years` years at annual `rate` (end-of-year payments).
    rate 0 → just `years`. */
 function annuityFactor(rate, years){ return rate>0 ? (1-Math.pow(1+rate,-years))/rate : years; }
-/* Cost a view ranks/plots by: 'scatter' | 'matrix', each with its own
-   #<view>-basis select. Lifecycle only applies to runs that have one (advanced). */
+/* Cost a view ranks/plots by: 'scatter' (its #scatter-basis select) or 'matrix' (the
+   "Lifecycle cost" option of #matrix-metric). Lifecycle only applies to runs that have one (advanced). */
 function costBasis(view){
-  const el = document.getElementById(view+'-basis');
-  return el && el.value==='lifecycle' && allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? 'lifecycle' : 'upfront';
+  // the matrix picks lifecycle through its metric dropdown; the scatter has its own select
+  const lifecycle = view==='matrix'
+    ? document.getElementById('matrix-metric').value==='lifecycle-cost'
+    : document.getElementById(view+'-basis').value==='lifecycle';
+  return lifecycle && allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? 'lifecycle' : 'upfront';
 }
 function viewCost(run, view){ return costBasis(view)==='lifecycle' && run.lifecycleCost!=null ? run.lifecycleCost : run.cost; }
-function costAxisTitle(view){ return costBasis(view)==='lifecycle' ? 'Lifecycle cost ($)' : 'Total cost ($)'; }
+function hasLifecycleRuns(){ return !!(allRuns && allRuns.length && allRuns[0].lifecycleCost!=null); }
+function costAxisTitle(view){ return costBasis(view)==='lifecycle' ? 'Lifecycle cost ($)' : hasLifecycleRuns() ? 'Upfront cost ($)' : 'Total cost ($)'; }
 function formatDollars(v){ return '$'+Math.round(v).toLocaleString(); }
 /* "Lifecycle cost" column (upfront + NPV of unmet energy), advanced runs only */
 function lifecycleTh(){ return allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? '<th title="Total cost plus the present value of unmet energy over the discount period">Lifecycle cost</th>' : ''; }
@@ -1381,9 +1384,14 @@ function renderComparison(){
 /* ── Matrix metrics selectable via the #matrix-metric dropdown ── */
 const MATRIX_METRICS = {
   cost: {
-    value: run => viewCost(run,'matrix'),
+    value: run => run.cost,
     label: c => '$'+Math.round(c).toLocaleString(),
-    hint: 'Total system cost (PV + battery + fixed). Click a cell to highlight the same configuration in the tables above and below.'
+    hint: 'Total upfront system cost (PV + battery + fixed). Click a cell to highlight the same configuration in the tables above and below.'
+  },
+  'lifecycle-cost': {
+    value: run => run.lifecycleCost ?? run.cost,
+    label: c => '$'+Math.round(c).toLocaleString(),
+    hint: 'Upfront cost plus the present value of unmet energy over the discount period. Click a cell to highlight the same configuration in the tables above and below.'
   },
   'unmet-kwh': {
     value: run => computeTotalUnmetKwh(run),
@@ -1438,7 +1446,6 @@ function renderMatrix(){
   });
 }
 document.getElementById('matrix-metric').addEventListener('change', renderMatrix);
-document.getElementById('matrix-basis').addEventListener('change', renderMatrix);
 document.getElementById('scatter-basis').addEventListener('change', renderUnmetKwhScatter);
 
 /* ── The scatter has two x/y truncations:
@@ -1843,7 +1850,7 @@ function downloadWordReport(){
     // Every block, the first included, starts a fresh page so its two tables share it.
     matrices += `\\pard\\page\n`;
     matrices += buildMatrixBlock(`Unmet kWh/Year Matrix${range}`, unmetCells, cols)
-              + buildMatrixBlock(`${costBasis('matrix')==='lifecycle' ? 'Lifecycle' : 'Total'} Cost Matrix${range}`, costCells, cols);
+              + buildMatrixBlock(`${costBasis('matrix')==='lifecycle' ? 'Lifecycle' : hasLifecycleRuns() ? 'Upfront' : 'Total'} Cost Matrix${range}`, costCells, cols);
   }
 
   const ASSUMPTIONS = [
@@ -2117,7 +2124,13 @@ async function performSimulation({scroll=true}={}){
     skipNote.textContent = skippedBatt.length
       ? `⚠️ Not simulated: ${skippedBatt.map(b=>b+' Wh').join(', ')} ${skippedBatt.length===1?'battery':'batteries'}. No C-rate in the cost table can deliver the ${maxLoadW/1000} kW maximum load from ${skippedBatt.length===1?'that size':'those sizes'}.`
       : '';
-    document.getElementById('results').classList.toggle('has-lifecycle', allRuns[0].lifecycleCost!=null);
+    const hasLifecycle = allRuns[0].lifecycleCost!=null;
+    document.getElementById('results').classList.toggle('has-lifecycle', hasLifecycle);
+    const mSel = document.getElementById('matrix-metric');
+    const lcOpt = mSel.querySelector('option[value="lifecycle-cost"]');
+    lcOpt.hidden = lcOpt.disabled = !hasLifecycle;
+    mSel.querySelector('option[value="cost"]').textContent = hasLifecycle ? 'Upfront cost' : 'Total Cost';
+    if(!hasLifecycle && mSel.value==='lifecycle-cost') mSel.value = 'cost';
     document.getElementById('results').style.display='block';
     renderFrontierTable();
     renderComparison();
