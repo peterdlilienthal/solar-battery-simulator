@@ -132,6 +132,10 @@
   /* ── Advanced mode: body.advanced shows .adv-only elements and hides .basic-only ones ── */
   .adv-only{display:none !important;}
   body.advanced .adv-only{display:flex !important;}
+  body.advanced .card.adv-only{display:block !important;}
+  /* Upfront/lifecycle cost-basis selects: only once the shown results have a lifecycle cost */
+  .basis-select{display:none;}
+  #results.has-lifecycle .basis-select{display:inline-block;}
   body.advanced .basic-only{display:none !important;}
   .adv-switch-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:14px;}
   .adv-switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:15px;color:rgba(255,255,255,.85);user-select:none;}
@@ -265,6 +269,27 @@
     </div>
   </div>
 
+  <div class="card adv-only">
+    <div class="card-title">📈 Economics</div>
+    <div class="fields fields-3">
+      <div class="field">
+        <label>Cost of unmet energy ($/kWh)</label>
+        <input type="number" id="unmet-cost-kwh" value="1.00" min="0" step="0.05">
+        <span class="hint">What each kWh of load the system can't supply costs you</span>
+      </div>
+      <div class="field">
+        <label>Discount rate (%)</label>
+        <input type="number" id="discount-rate" value="10" min="0" step="0.5">
+        <span class="hint">Annual rate for valuing future costs</span>
+      </div>
+      <div class="field">
+        <label>Discount period (years)</label>
+        <input type="number" id="discount-years" value="10" min="1" step="1">
+        <span class="hint">How many years of operation to count</span>
+      </div>
+    </div>
+  </div>
+
   <p style="margin:16px 0;"><strong>Step 3: Enter the widest range you think might be appropriate to simulate.</strong></p>
 
   <div class="card">
@@ -303,6 +328,7 @@
     <div class="card">
       <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <span>📉 Cost vs. Unmet kWh/Year</span>
+        <select id="scatter-basis" class="metric-select basis-select" title="Which cost this view uses"><option value="upfront">Upfront cost</option><option value="lifecycle">Lifecycle cost</option></select>
         <label style="display:flex;align-items:center;gap:8px;">
           <span>Show ≥</span>
           <input type="number" id="scatter-met-floor" class="metric-select" min="0" max="100" step="1" placeholder="0" style="width:64px;text-align:right;">
@@ -327,7 +353,9 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">🏆 Cost Frontier</div>
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span>🏆 Cost Frontier</span>
+      </div>
       <div style="overflow-x:auto"><table class="mtbl" id="frontier-tbl"></table></div>
       <p class="cmp-hint">Configs where no other config is both cheaper and lower in unmet kWh, ordered most- to least-reliable. Marginal $/kWh is the extra cost per kWh of unmet energy avoided versus the next-cheaper frontier config; the cheapest config has none. Click a row to highlight the same configuration in the tables below.</p>
     </div>
@@ -347,6 +375,7 @@
         <span>🔢 Matrix (PV × Battery)</span>
         <select id="matrix-metric" class="metric-select">
           <option value="cost">Total Cost</option>
+          <option value="lifecycle-cost" hidden disabled>Lifecycle cost</option>
           <option value="unmet-kwh">Unmet kWh/yr</option>
           <option value="load-met-pct">Load met %</option>
         </select>
@@ -478,7 +507,7 @@ let placeSearchCoords = null;
 const CONFIG_STORAGE_KEY = 'solarSimConfig';
 // report-name is deliberately NOT here — it's per-export, not a saved setting, so it must
 // not persist across reloads or leak from one report into the next.
-const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed','max-load-kw'];
+const CONFIG_FIELD_IDS = ['lat','lon','place-search','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed','max-load-kw','unmet-cost-kwh','discount-rate','discount-years'];
 
 /* ── Advanced mode: a battery cost table by C-rate (replaces the single $/kWh field) and a
    maximum load in kW. battCostTable rows are {c, price} as typed strings so a half-typed
@@ -583,6 +612,25 @@ function pickBattRow(rows, battWh, maxLoadW){
   return best;
 }
 function formatCRate(c){ return `${+c.toFixed(3)}C`; }
+/* Present value of $1/year for `years` years at annual `rate` (end-of-year payments).
+   rate 0 → just `years`. */
+function annuityFactor(rate, years){ return rate>0 ? (1-Math.pow(1+rate,-years))/rate : years; }
+/* Cost a view ranks/plots by: 'scatter' (its #scatter-basis select) or 'matrix' (the
+   "Lifecycle cost" option of #matrix-metric). Lifecycle only applies to runs that have one (advanced). */
+function costBasis(view){
+  // the matrix picks lifecycle through its metric dropdown; the scatter has its own select
+  const lifecycle = view==='matrix'
+    ? document.getElementById('matrix-metric').value==='lifecycle-cost'
+    : document.getElementById(view+'-basis').value==='lifecycle';
+  return lifecycle && allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? 'lifecycle' : 'upfront';
+}
+function viewCost(run, view){ return costBasis(view)==='lifecycle' && run.lifecycleCost!=null ? run.lifecycleCost : run.cost; }
+function hasLifecycleRuns(){ return !!(allRuns && allRuns.length && allRuns[0].lifecycleCost!=null); }
+function costAxisTitle(view){ return costBasis(view)==='lifecycle' ? 'Lifecycle cost ($)' : hasLifecycleRuns() ? 'Upfront cost ($)' : 'Total cost ($)'; }
+function formatDollars(v){ return '$'+Math.round(v).toLocaleString(); }
+/* "Lifecycle cost" column (upfront + NPV of unmet energy), advanced runs only */
+function lifecycleTh(){ return allRuns && allRuns.length && allRuns[0].lifecycleCost!=null ? '<th title="Total cost plus the present value of unmet energy over the discount period">Lifecycle cost</th>' : ''; }
+function lifecycleTd(run){ return run.lifecycleCost!=null ? `<td style="font-family:'Space Mono',monospace">${formatDollars(run.lifecycleCost)}</td>` : ''; }
 function formatBattType(run){ return run.cRate!=null ? `${formatCRate(run.cRate)} @ $${run.battPriceKwh}/kWh` : ''; }
 /* "Battery type" column for the frontier/comparison tables, shown only when the results came from an advanced run */
 function battTypeTh(){ return allRuns && allRuns.length && allRuns[0].cRate!=null ? '<th>Battery type</th>' : ''; }
@@ -591,7 +639,7 @@ function battTypeTd(run){ return run.cRate!=null ? `<td style="font-family:'Spac
 /* ── Disallow negative numbers in every magnitude-only numeric input (cost/load fields —
    Lat/Long are excluded since negative is a legitimate hemisphere). Clamps to 0 the moment
    a negative value is fully typed, rather than only rejecting it on Run. ── */
-const NON_NEGATIVE_INPUT_IDS = ['max-load-kw','cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
+const NON_NEGATIVE_INPUT_IDS = ['unmet-cost-kwh','discount-rate','discount-years','max-load-kw','cost-pv-w','cost-batt-kwh','cost-fixed','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int'];
 NON_NEGATIVE_INPUT_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', ()=>{
@@ -1260,14 +1308,14 @@ function renderFrontierTable(){
     .sort((a,b)=> b.run.cost-a.run.cost);
 
   const tbl = document.getElementById('frontier-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>${lifecycleTh() ? 'Upfront cost' : 'Total Cost'}</th>${lifecycleTh()}<th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Marginal $/kWh</th></tr></thead><tbody>`+
     rows.map((e,k)=>{
       const {run,i,unmetKwh} = e;
       const next = rows[k+1];
       const marginal = next ? (run.cost-next.run.cost)/(next.unmetKwh-unmetKwh) : null;
       const activeCls = i===activeCfgIdx ? ' active-row' : '';
       return `<tr data-idx="${i}" class="${activeCls}">
-        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
+        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>${lifecycleTd(run)}
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
         <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
@@ -1292,13 +1340,13 @@ function renderFrontierTable(){
 function renderComparison(){
   const isFrontier = computeFrontier(allRuns.map(run=>computeTotalUnmetKwh(run)), allRuns.map(run=>run.cost));
   const tbl = document.getElementById('cmp-tbl');
-  tbl.innerHTML = `<thead><tr><th>Total Cost</th><th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
+  tbl.innerHTML = `<thead><tr><th>${lifecycleTh() ? 'Upfront cost' : 'Total Cost'}</th>${lifecycleTh()}<th>PV</th><th>Battery</th>${battTypeTh()}<th>Unmet kWh/yr</th><th>Load met %</th><th>Days @ min SOC</th><th>Days @ 100% SOC</th><th>Data</th></tr></thead><tbody>`+
     allRuns.map((run,i)=>{
       const soc = computeSocExtremeDays(run);
       const unmetKwh = computeTotalUnmetKwh(run);
       const rowCls = (i===activeCfgIdx ? ' active-row' : '') + (isFrontier[i] ? ' frontier-row' : '');
       return `<tr data-idx="${i}" class="${rowCls}">
-        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>
+        <td style="font-family:'Space Mono',monospace">$${Math.round(run.cost).toLocaleString()}</td>${lifecycleTd(run)}
         <td style="font-family:'Space Mono',monospace">${run.pv} W</td>
         <td style="font-family:'Space Mono',monospace">${run.batt} Wh</td>${battTypeTd(run)}
         <td style="font-family:'Space Mono',monospace">${formatUnmetKwh(unmetKwh)}</td>
@@ -1338,7 +1386,12 @@ const MATRIX_METRICS = {
   cost: {
     value: run => run.cost,
     label: c => '$'+Math.round(c).toLocaleString(),
-    hint: 'Total system cost (PV + battery + fixed). Click a cell to highlight the same configuration in the tables above and below.'
+    hint: 'Total upfront system cost (PV + battery + fixed). Click a cell to highlight the same configuration in the tables above and below.'
+  },
+  'lifecycle-cost': {
+    value: run => run.lifecycleCost ?? run.cost,
+    label: c => '$'+Math.round(c).toLocaleString(),
+    hint: 'Upfront cost plus the present value of unmet energy over the discount period. Click a cell to highlight the same configuration in the tables above and below.'
   },
   'unmet-kwh': {
     value: run => computeTotalUnmetKwh(run),
@@ -1360,7 +1413,7 @@ function renderMatrix(){
   const pvSizes = [...new Set(allRuns.map(r=>r.pv))].sort((a,b)=>a-b);
   const battSizes = [...new Set(allRuns.map(r=>r.batt))].sort((a,b)=>a-b);
   const idxByKey = new Map(allRuns.map((r,i)=>[`${r.pv}|${r.batt}`, i]));
-  const isFrontier = computeFrontier(allRuns.map(run=>computeTotalUnmetKwh(run)), allRuns.map(r=>r.cost));
+  const isFrontier = computeFrontier(allRuns.map(run=>computeTotalUnmetKwh(run)), allRuns.map(r=>viewCost(r,'matrix')));
 
   let html = `<thead><tr><th></th><th class="mtx-pv-label">PV</th>${pvSizes.map(pv=>`<th>${pv} W</th>`).join('')}</tr></thead><tbody>`;
   battSizes.forEach((batt,ri)=>{
@@ -1393,6 +1446,7 @@ function renderMatrix(){
   });
 }
 document.getElementById('matrix-metric').addEventListener('change', renderMatrix);
+document.getElementById('scatter-basis').addEventListener('change', renderUnmetKwhScatter);
 
 /* ── The scatter has two x/y truncations:
    • x-axis — hide configs below the "% of load met" floor typed in the chart header
@@ -1413,7 +1467,7 @@ function scatterUnmetCutoff(annualLoadKwh){
    are hidden. Infinity ⇒ no cap (fewer than that many configs reach 100%). */
 function scatterCostCutoff(unmetKwhByIdx){
   const reliableCosts = allRuns.filter((_,i)=> unmetKwhByIdx[i] <= 1e-9)
-    .map(r=>r.cost).sort((a,b)=>a-b);
+    .map(r=>viewCost(r,'scatter')).sort((a,b)=>a-b);
   return SCATTER_RELIABLE_CAP < reliableCosts.length ? reliableCosts[SCATTER_RELIABLE_CAP-1] : Infinity;
 }
 
@@ -1423,18 +1477,18 @@ function renderUnmetKwhScatter(){
   const M={l:64,r:20,t:20,b:88};
 
   const unmetKwhByIdx = allRuns.map(run=>computeTotalUnmetKwh(run));
-  const isFrontier = computeFrontier(unmetKwhByIdx, allRuns.map(run=>run.cost));
+  const isFrontier = computeFrontier(unmetKwhByIdx, allRuns.map(run=>viewCost(run,'scatter')));
   const annualLoadKwh = computeAnnualLoadKwh(allRuns[0]);
 
   const xCutoff = scatterUnmetCutoff(annualLoadKwh);
   const costCutoff = scatterCostCutoff(unmetKwhByIdx);
-  const inView = i => unmetKwhByIdx[i] <= xCutoff + 1e-9 && allRuns[i].cost <= costCutoff + 1e-9;
+  const inView = i => unmetKwhByIdx[i] <= xCutoff + 1e-9 && viewCost(allRuns[i],'scatter') <= costCutoff + 1e-9;
   const shown = allRuns.filter((_,i)=> inView(i));
   // If the filters hide everything, keep the axes scaled to the full set (no dots draw).
   const scaleSet = shown.length ? shown : allRuns;
 
   const xs = scaleSet.map(run=>computeTotalUnmetKwh(run));
-  const ys = scaleSet.map(run=>run.cost);
+  const ys = scaleSet.map(run=>viewCost(run,'scatter'));
   const xMaxRaw = Math.max(...xs);
   const xMax = Math.max(0.001, Math.min(xMaxRaw>0 ? xMaxRaw*1.15 : 1, xCutoff));
   const yMinRaw = Math.min(...ys), yMaxRaw = Math.max(...ys);
@@ -1472,16 +1526,16 @@ function renderUnmetKwhScatter(){
   svg += `<line x1="${M.l}" y1="${M.t+plotH}" x2="${M.l+plotW}" y2="${M.t+plotH}" stroke="rgba(255,255,255,.2)"/>`;
   svg += `<text x="${M.l+plotW/2}" y="${M.t+plotH+52}" text-anchor="middle" font-size="13" fill="rgba(255,255,255,.67)" font-family="'Space Grotesk',sans-serif">Unmet kWh / year</text>`;
   svg += `<text x="${M.l+plotW/2}" y="${M.t+plotH+68}" text-anchor="middle" font-size="12" fill="rgba(255,255,255,.44)" font-family="'Space Grotesk',sans-serif">% of load met</text>`;
-  svg += `<text x="16" y="${M.t+plotH/2}" text-anchor="middle" font-size="13" fill="rgba(255,255,255,.67)" font-family="'Space Grotesk',sans-serif" transform="rotate(-90 16 ${M.t+plotH/2})">Total cost ($)</text>`;
+  svg += `<text x="16" y="${M.t+plotH/2}" text-anchor="middle" font-size="13" fill="rgba(255,255,255,.67)" font-family="'Space Grotesk',sans-serif" transform="rotate(-90 16 ${M.t+plotH/2})">${costAxisTitle('scatter')}</text>`;
 
   const dotSvg = i => {
     const run = allRuns[i], unmetKwh = unmetKwhByIdx[i];
-    const cx=xScale(unmetKwh), cy=yScale(run.cost);
+    const cx=xScale(unmetKwh), cy=yScale(viewCost(run,'scatter'));
     const fill = isFrontier[i] ? 'var(--good)' : 'var(--muted)';
     const isActive = i===activeCfgIdx;
     const r = isActive?6:4;
     const frontierNote = isFrontier[i] ? ' (no cheaper system has lower unmet kWh, and no lower-unmet-kWh system is cheaper)' : '';
-    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${run.cRate!=null ? ` — ${formatCRate(run.cRate)} battery at $${run.battPriceKwh}/kWh` : ''}${frontierNote}</title></circle>`;
+    return `<circle class="unmet-kwh-scatter-dot" data-idx="${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" fill-opacity="${isActive?1:0.85}" stroke="${isActive?'var(--sun)':'none'}" stroke-width="${isActive?3:0}"><title>${run.pv} W / ${run.batt} Wh — ${formatLoadMetPct(computeLoadMetPct(run))} of load met (${formatUnmetKwh(unmetKwh)} kWh/yr unmet), $${Math.round(run.cost).toLocaleString()}${run.cRate!=null ? ` — ${formatCRate(run.cRate)} battery at $${run.battPriceKwh}/kWh` : ''}${run.lifecycleCost!=null ? ` — lifecycle cost ${formatDollars(run.lifecycleCost)} (incl. ${formatDollars(run.npvUnmet)} NPV of unmet energy)` : ''}${frontierNote}</title></circle>`;
   };
   // Draw non-frontier (gray) dots first, then frontier (green) dots, so green always sits on top.
   allRuns.forEach((run,i)=>{ if(inView(i) && !isFrontier[i]) svg += dotSvg(i); });
@@ -1555,19 +1609,19 @@ function buildReportUnmetKwhScatterCanvas(){
   const M={l:80,r:30,t:30,b:100};
 
   const unmetKwhByIdx = allRuns.map(run=>computeTotalUnmetKwh(run));
-  const isFrontier = computeFrontier(unmetKwhByIdx, allRuns.map(run=>run.cost));
+  const isFrontier = computeFrontier(unmetKwhByIdx, allRuns.map(run=>viewCost(run,'scatter')));
   const annualLoadKwh = computeAnnualLoadKwh(allRuns[0]);
 
   // Match the on-screen scatter's optional x-axis (% of load met) and y-axis
   // (Nth-cheapest reliable) truncations.
   const xCutoff = scatterUnmetCutoff(annualLoadKwh);
   const costCutoff = scatterCostCutoff(unmetKwhByIdx);
-  const inView = i => unmetKwhByIdx[i] <= xCutoff + 1e-9 && allRuns[i].cost <= costCutoff + 1e-9;
+  const inView = i => unmetKwhByIdx[i] <= xCutoff + 1e-9 && viewCost(allRuns[i],'scatter') <= costCutoff + 1e-9;
   const scaleSet = allRuns.filter((_,i)=> inView(i));
   const shown = scaleSet.length ? scaleSet : allRuns;
 
   const xs = shown.map(run=>computeTotalUnmetKwh(run));
-  const ys = shown.map(run=>run.cost);
+  const ys = shown.map(run=>viewCost(run,'scatter'));
   const xMaxRaw = Math.max(...xs);
   const xMax = Math.max(0.001, Math.min(xMaxRaw>0 ? xMaxRaw*1.15 : 1, xCutoff));
   const yMinRaw = Math.min(...ys), yMaxRaw = Math.max(...ys);
@@ -1613,12 +1667,12 @@ function buildReportUnmetKwhScatterCanvas(){
   ctx.fillText('% of load met', M.l+plotW/2, M.t+plotH+76);
   ctx.save();
   ctx.translate(20, M.t+plotH/2); ctx.rotate(-Math.PI/2);
-  ctx.fillText('Total cost ($)', 0, 0);
+  ctx.fillText(costAxisTitle('scatter'), 0, 0);
   ctx.restore();
 
   const drawDot = i => {
     const run = allRuns[i];
-    const cx=xScale(unmetKwhByIdx[i]), cy=yScale(run.cost);
+    const cx=xScale(unmetKwhByIdx[i]), cy=yScale(viewCost(run,'scatter'));
     const fill = isFrontier[i] ? '#27AE60' : '#8A94A3';
     const isActive = i===activeCfgIdx;
     ctx.beginPath(); ctx.arc(cx,cy,isActive?8:6,0,Math.PI*2);
@@ -1712,7 +1766,10 @@ function downloadWordReport(){
     ['Cost per watt (PV)', `$${g('cost-pv-w')}`],
     ...(allRuns[0].cRate!=null
       ? [['Battery cost by C-rate', battCostTable.filter(r=>String(r.c).trim()!=='').map(r=>`${r.c}C: $${r.price}/kWh`).join(', ')],
-         ['Maximum load', `${g('max-load-kw')} kW`]]
+         ['Maximum load', `${g('max-load-kw')} kW`],
+         ['Cost of unmet energy', `$${g('unmet-cost-kwh')}/kWh`],
+         ['Discount rate', `${g('discount-rate')}%`],
+         ['Discount period', `${g('discount-years')} years`]]
       : [['Cost per kWh (battery)', `$${g('cost-batt-kwh')}`]]),
     ['Inverter, controls & misc', `$${g('cost-fixed')}`],
     ['Data source', `PVGIS ${allRuns[0].datasetLabel} \u2014 ${formatYearLabel(allRuns[0].year)} \u2014 tilt ${allRuns[0].tilt}\u00b0, azimuth ${allRuns[0].azimuth}\u00b0`]
@@ -1750,7 +1807,7 @@ function downloadWordReport(){
     const idx = idxByKey.get(`${pv}|${batt}`);
     return idx===undefined ? '—' : cellText(allRuns[idx]);
   }));
-  const costCells  = matrixCells(run => '$'+Math.round(run.cost).toLocaleString());
+  const costCells  = matrixCells(run => '$'+Math.round(viewCost(run,'matrix')).toLocaleString());
   const unmetCells = matrixCells(run => formatUnmetKwh(computeTotalUnmetKwh(run)));
 
   // One layout shared by both matrices, sized from the widest text in either, so
@@ -1793,7 +1850,7 @@ function downloadWordReport(){
     // Every block, the first included, starts a fresh page so its two tables share it.
     matrices += `\\pard\\page\n`;
     matrices += buildMatrixBlock(`Unmet kWh/Year Matrix${range}`, unmetCells, cols)
-              + buildMatrixBlock(`Total Cost Matrix${range}`, costCells, cols);
+              + buildMatrixBlock(`${costBasis('matrix')==='lifecycle' ? 'Lifecycle' : hasLifecycleRuns() ? 'Upfront' : 'Total'} Cost Matrix${range}`, costCells, cols);
   }
 
   const ASSUMPTIONS = [
@@ -1811,7 +1868,8 @@ function downloadWordReport(){
     ['PV size', `${activeRun.pv} W`],
     ['Battery size', `${activeRun.batt} Wh`],
     ...(activeRun.cRate!=null ? [['Battery type', formatBattType(activeRun)]] : []),
-    ['Total cost', `$${Math.round(activeRun.cost).toLocaleString()}`],
+    [activeRun.lifecycleCost!=null ? 'Upfront cost' : 'Total cost', `$${Math.round(activeRun.cost).toLocaleString()}`],
+    ...(activeRun.lifecycleCost!=null ? [['NPV of unmet energy', formatDollars(activeRun.npvUnmet)], ['Lifecycle cost', formatDollars(activeRun.lifecycleCost)]] : []),
     ['Unmet kWh/year', formatUnmetKwh(activeUnmetKwh)],
     ['Load met %/year', formatLoadMetPct(computeLoadMetPct(activeRun))]
   ];
@@ -1972,11 +2030,18 @@ async function performSimulation({scroll=true}={}){
   if(dayWh+nightWh<=0){setErr('Total daily load must be > 0 Wh.');return;}
   if(isNaN(costPvW)||costPvW<0){setErr('$ per watt (PV) must be a non-negative number.');return;}
   const advanced = isAdvanced();
-  let battRows = null, maxLoadW = 0;
+  let battRows = null, maxLoadW = 0, econ = null;
   if(advanced){
     try{ battRows = parseBattCostTable(); }catch(e){ setErr(e.message); return; }
     const maxLoadKw = parseFloat(document.getElementById('max-load-kw').value);
     if(isNaN(maxLoadKw)||maxLoadKw<0){setErr('Maximum load (kW) must be a non-negative number.');return;}
+    const unmetCost = parseFloat(document.getElementById('unmet-cost-kwh').value);
+    const discRate = parseFloat(document.getElementById('discount-rate').value);
+    const discYears = parseFloat(document.getElementById('discount-years').value);
+    if(isNaN(unmetCost)||unmetCost<0){setErr('Cost of unmet energy ($/kWh) must be a non-negative number.');return;}
+    if(isNaN(discRate)||discRate<0){setErr('Discount rate (%) must be a non-negative number.');return;}
+    if(isNaN(discYears)||discYears<=0){setErr('Discount period (years) must be greater than 0.');return;}
+    econ = { unmetCost, annuity: annuityFactor(discRate/100, discYears) };
     maxLoadW = maxLoadKw*1000;
   }else if(isNaN(costBattKwh)||costBattKwh<0){setErr('$ per kWh (battery) must be a non-negative number.');return;}
   if(isNaN(costFixed)||costFixed<0){setErr('Inverter, controls & misc ($) must be a non-negative number.');return;}
@@ -2036,10 +2101,17 @@ async function performSimulation({scroll=true}={}){
       const cost = cfg.pv*costPvW + (cfg.batt/1000)*battPriceKwh + costFixed;
       return {
         pv:cfg.pv, batt:cfg.batt, results, hourlyLog, cost,
-        cRate: row ? row.c : null, battPriceKwh,
+        cRate: row ? row.c : null, battPriceKwh, econ,
         year, meta, dayWh, nightWh,
         datasetLabel: displayName, tilt, azimuth
       };
+    });
+    // Advanced: NPV of the yearly unmet energy over the discount period, added to the upfront
+    // cost as a separate lifecycle cost. run.cost stays upfront-only; each view picks one via viewCost()
+    allRuns.forEach(run=>{
+      if(!run.econ) return;
+      run.npvUnmet = computeTotalUnmetKwh(run) * run.econ.unmetCost * run.econ.annuity;
+      run.lifecycleCost = run.cost + run.npvUnmet;
     });
     // default selection to the config with the least unmet energy
     activeCfgIdx = allRuns.reduce((bi,run,i,arr)=> computeTotalUnmetKwh(run)<computeTotalUnmetKwh(arr[bi])?i:bi, 0);
@@ -2052,6 +2124,13 @@ async function performSimulation({scroll=true}={}){
     skipNote.textContent = skippedBatt.length
       ? `⚠️ Not simulated: ${skippedBatt.map(b=>b+' Wh').join(', ')} ${skippedBatt.length===1?'battery':'batteries'}. No C-rate in the cost table can deliver the ${maxLoadW/1000} kW maximum load from ${skippedBatt.length===1?'that size':'those sizes'}.`
       : '';
+    const hasLifecycle = allRuns[0].lifecycleCost!=null;
+    document.getElementById('results').classList.toggle('has-lifecycle', hasLifecycle);
+    const mSel = document.getElementById('matrix-metric');
+    const lcOpt = mSel.querySelector('option[value="lifecycle-cost"]');
+    lcOpt.hidden = lcOpt.disabled = !hasLifecycle;
+    mSel.querySelector('option[value="cost"]').textContent = hasLifecycle ? 'Upfront cost' : 'Total Cost';
+    if(!hasLifecycle && mSel.value==='lifecycle-cost') mSel.value = 'cost';
     document.getElementById('results').style.display='block';
     renderFrontierTable();
     renderComparison();
@@ -2067,7 +2146,7 @@ async function performSimulation({scroll=true}={}){
 
 /* ── Hitting Enter in any input card, or clicking the Run Simulation button, runs the
    full simulation (fetching data first if needed) ── */
-const SIM_TRIGGER_FIELD_IDS = ['max-load-kw','lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
+const SIM_TRIGGER_FIELD_IDS = ['unmet-cost-kwh','discount-rate','discount-years','max-load-kw','lat','lon','day-load','night-load','pv-min','pv-max','pv-int','batt-min','batt-max','batt-int','cost-pv-w','cost-batt-kwh','cost-fixed'];
 SIM_TRIGGER_FIELD_IDS.forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('keydown', e=>{

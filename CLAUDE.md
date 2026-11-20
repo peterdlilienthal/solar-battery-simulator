@@ -134,6 +134,19 @@ worker is ever renamed or moved to a custom domain.
    (`battTypeTh()` / `battTypeTd()`, only for advanced runs) and the report's selected
    config. The matrices don't show it. Basic mode leaves `cRate` null and `battMaxW`
    unlimited.
+   An Economics card (advanced only) holds `unmet-cost-kwh`, `discount-rate`,
+   `discount-years`. Each advanced run gets `run.npvUnmet` = unmet kWh/yr × $/kWh ×
+   `annuityFactor(rate, years)` and `run.lifecycleCost` = `run.cost` + that. It's shown
+   *alongside* the upfront cost (a "Lifecycle cost" column in the frontier and
+   comparison tables, the scatter hover, the report's selected config); `run.cost`
+   itself stays upfront-only, and the tables label it "Upfront cost" when the
+   lifecycle column is shown. The frontier and comparison tables always rank by upfront
+   cost (both costs are visible as columns, so no switch). The scatter has an
+   Upfront/Lifecycle select (`#scatter-basis`, visible only when
+   `#results.has-lifecycle`); the matrix instead gets a "Lifecycle cost" option in
+   `#matrix-metric` (hidden/disabled unless the run has one). `viewCost(run, view)`
+   returns the cost that view plots by (scatter y-axis and reliable-config cap, matrix
+   frontier colouring and the report's cost matrix).
 
 ## Simulation model — known simplifications
 
