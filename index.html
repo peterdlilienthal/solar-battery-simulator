@@ -145,6 +145,15 @@
   .adv-switch input:checked + .track{background:var(--sun);}
   .adv-switch input:checked + .track::after{left:23px;}
   .adv-switch input:focus-visible + .track{outline:2px solid var(--sun);outline-offset:2px;}
+  /* Circled "i" next to the Advanced switch: hover (desktop) or tap (phones) shows .adv-info-tip */
+  .adv-info{position:relative;display:inline-flex;}
+  .info-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:1.5px solid rgba(245,166,35,.7);border-radius:50%;background:transparent;color:var(--sun);font:italic 700 13px/1 Georgia,'Times New Roman',serif;cursor:pointer;position:relative;flex-shrink:0;}
+  .info-btn::before{content:'';position:absolute;inset:-11px;}
+  .info-btn:hover,.info-btn[aria-expanded="true"],.info-btn:focus-visible{background:var(--sun);color:var(--night);outline:none;}
+  .adv-info-tip{position:absolute;top:calc(100% + 10px);right:-6px;width:max-content;max-width:min(280px,calc(100vw - 32px));background:var(--dusk);color:rgba(255,255,255,.92);border:1px solid rgba(245,166,35,.3);border-radius:9px;padding:10px 12px;font-size:13px;font-weight:400;line-height:1.5;text-align:left;box-shadow:0 6px 18px rgba(0,0,0,.35);opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px);transition:opacity .13s,transform .13s,visibility .13s;z-index:120;}
+  .adv-info-tip::before{content:'';position:absolute;bottom:100%;right:11px;border:6px solid transparent;border-bottom-color:rgba(245,166,35,.45);}
+  .adv-info.open .adv-info-tip,.adv-info:has(:focus-visible) .adv-info-tip{opacity:1;visibility:visible;transform:translateY(0);}
+  @media(hover:hover){.adv-info:hover .adv-info-tip{opacity:1;visibility:visible;transform:translateY(0);}}
   .batt-cost-tbl{border-collapse:collapse;width:100%;}
   .batt-cost-tbl th{text-align:left;font-size:13px;color:rgba(255,255,255,.7);font-weight:500;padding:0 6px 6px 0;}
   .batt-cost-tbl td{padding:0 6px 6px 0;}
@@ -172,6 +181,10 @@
       <span class="track"></span>
       <span>Advanced</span>
     </label>
+    <span class="adv-info">
+      <button type="button" class="info-btn" id="adv-info-btn" aria-label="What is the Advanced version?" aria-expanded="false" aria-controls="adv-info-tip">i</button>
+      <span class="adv-info-tip" id="adv-info-tip" role="tooltip">The Advanced version optimizes the C&#8209;rate for the battery and includes a $/kWh cost for unmet energy.</span>
+    </span>
   </div>
 
   <p style="margin:0 0 16px;line-height:1.55;">This app shows how much it costs to have PV + Batteries meet most of a household&rsquo;s energy needs, including cooking which is, by far, a household&rsquo;s largest energy need. The main output is a graphic representation of the trade-off between cost and&nbsp; the need for load flexibility.<br><br><strong>Step 1: click on the map or type in the location</strong></p>
@@ -549,6 +562,14 @@ CONFIG_FIELD_IDS.forEach(id=>{
 });
 
 /* ── Advanced switch and the battery cost table editor ── */
+// Circled "i" next to the switch: tap/click toggles its tooltip (phones have no hover); outside click or Esc closes
+(function(){
+  const btn=document.getElementById('adv-info-btn'), wrap=btn.parentElement;
+  const set=open=>{ wrap.classList.toggle('open',open); btn.setAttribute('aria-expanded',open); };
+  btn.addEventListener('click',e=>{ e.stopPropagation(); set(!wrap.classList.contains('open')); });
+  document.addEventListener('click',e=>{ if(!wrap.contains(e.target)) set(false); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') set(false); });
+})();
 document.getElementById('advanced-toggle').addEventListener('change', e=>{
   setAdvanced(e.target.checked);
   // keep the address bar in step so a reload / shared link matches what's on screen
